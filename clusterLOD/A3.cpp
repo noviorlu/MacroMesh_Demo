@@ -69,9 +69,7 @@ void A3::init()
 	// positions, and normals will be extracted and stored within the MeshConsolidator
 	// class.
 	unique_ptr<MeshConsolidator> meshConsolidator (new MeshConsolidator{
-			getAssetFilePath("cube.obj"),
-			getAssetFilePath("sphere.obj"),
-			getAssetFilePath("suzanne.obj")
+			getAssetFilePath("../../models/bunny/bunny.obj")
 	});
 
 
@@ -90,7 +88,7 @@ void A3::init()
 	m_rootNode->storeInitialTrans();
 	reset();
 
-	initLightSources();
+	OneLightSource();
 
 	m_gBuffer.initialize(m_framebufferWidth, m_framebufferHeight);
 	// Exiting the current scope calls delete automatically on meshConsolidator freeing
@@ -292,7 +290,7 @@ void A3::OneLightSource(){
 	m_lights.clear();
 	LightSource light;
 	light.position = vec3(3.0f, 3.0f, 3.0f);
-	light.rgbIntensity = vec3(0.2f); // light
+	light.rgbIntensity = vec3(0.8f); // light
 	m_lights.push_back(light);
 }
 
