@@ -1,4 +1,4 @@
-# CS488 Fall 2015 Project Code
+# uwaterloo CS488 Framework
 
 ---
 
