@@ -47,6 +47,14 @@ say **A0** for example, and run the following terminal commands in order to comp
 ## Windows
 Sorry for all of the hardcore Microsoft fans out there.  We have not had time to test the build system on Windows yet. Currently our build steps work for OSX and Linux, but all the steps should be the same on Windows, except you will need different libraries to link against when building your project executables.  Some good news is that premake4 can output a Visual Studio .sln file by running:
 
-    $ premake4 vs2013
+    $ premake4 gmake
 
  This should point you in the general direction.
+
+ if imgui has some fault like,
+process_begin: CreateProcess(NULL, cc -MD -MP -DDEBUG -I../shared -I../shared/gl3w -I../shared/imgui -I../shared/include -I../shared/imgui/examples/opengl3_example -I../shared/imgui/examples/libs/gl3w -g -o Debug/imgui/gl3w.o -MF Debug/imgui/gl3w.d -c ../shared/gl3w/GL/gl3w.c, ...) failed.
+make (e=2): The system cannot find the file specified.
+make[1]: *** [imgui.make:133: Debug/imgui/gl3w.o] Error 2
+make: *** [Makefile:37: imgui] Error 2
+
+goto file build/imgui.make, change $(CC) into gcc
