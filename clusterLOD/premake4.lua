@@ -67,7 +67,7 @@ buildOptions = {"-std=c++14"}
 solution "CS488-Projects"
     configurations { "Debug", "Release" }
 
-    project "A3"
+    project "cluster"
         kind "ConsoleApp"
         language "C++"
         location "build"

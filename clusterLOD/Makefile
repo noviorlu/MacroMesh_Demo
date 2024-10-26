@@ -9,22 +9,22 @@ ifndef verbose
 endif
 
 ifeq ($(config),debug)
-  A3_config = debug
+  cluster_config = debug
 endif
 ifeq ($(config),release)
-  A3_config = release
+  cluster_config = release
 endif
 
-PROJECTS := A3
+PROJECTS := cluster
 
 .PHONY: all clean help $(PROJECTS) 
 
 all: $(PROJECTS)
 
-A3:
-ifneq (,$(A3_config))
-	@echo "==== Building A3 ($(A3_config)) ===="
-	@${MAKE} --no-print-directory -C build -f Makefile config=$(A3_config)
+cluster:
+ifneq (,$(cluster_config))
+	@echo "==== Building cluster ($(cluster_config)) ===="
+	@${MAKE} --no-print-directory -C build -f Makefile config=$(cluster_config)
 endif
 
 clean:
@@ -40,6 +40,6 @@ help:
 	@echo "TARGETS:"
 	@echo "   all (default)"
 	@echo "   clean"
-	@echo "   A3"
+	@echo "   cluster"
 	@echo ""
 	@echo "For more information, see https://github.com/premake/premake-core/wiki"
