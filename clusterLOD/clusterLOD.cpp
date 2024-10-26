@@ -1,6 +1,6 @@
 // Termm-Fall 2024
 
-#include "A3.hpp"
+#include "clusterLOD.hpp"
 #include "scene_lua.hpp"
 using namespace std;
 
@@ -27,7 +27,7 @@ const size_t CIRCLE_PTS = 48;
 
 //----------------------------------------------------------------------------------------
 // Constructor
-A3::A3(const std::string & luaSceneFile)
+clusterLOD::clusterLOD(const std::string & luaSceneFile)
 	: m_luaSceneFile(luaSceneFile),
 	  m_positionAttribLocation(0),
 	  m_normalAttribLocation(0),
@@ -42,7 +42,7 @@ A3::A3(const std::string & luaSceneFile)
 
 //----------------------------------------------------------------------------------------
 // Destructor
-A3::~A3()
+clusterLOD::~clusterLOD()
 {
 
 }
@@ -51,7 +51,7 @@ A3::~A3()
 /*
  * Called once, at program start.
  */
-void A3::init()
+void clusterLOD::init()
 {
 	// Set the background colour.
 	glClearColor(0.0, 0.0, 0.0, 1.0);
@@ -98,7 +98,7 @@ void A3::init()
 }
 
 //----------------------------------------------------------------------------------------
-void A3::processLuaSceneFile(const std::string & filename) {
+void clusterLOD::processLuaSceneFile(const std::string & filename) {
 	// This version of the code treats the Lua file as an Asset,
 	// so that you'd launch the program with just the filename
 	// of a puppet in the Assets/ directory.
@@ -114,16 +114,16 @@ void A3::processLuaSceneFile(const std::string & filename) {
 }
 
 //----------------------------------------------------------------------------------------
-void A3::createShaderProgram()
+void clusterLOD::createShaderProgram()
 {
 	m_geometryPass.generateProgramObject();
-	m_geometryPass.attachVertexShader( getAssetFilePath("Defered/GeometryPass.vs").c_str() );
-	m_geometryPass.attachFragmentShader( getAssetFilePath("Defered/GeometryPass.fs").c_str() );
+	m_geometryPass.attachVertexShader( getAssetFilePath("Deferred/GeometryPass.vs").c_str() );
+	m_geometryPass.attachFragmentShader( getAssetFilePath("Deferred/GeometryPass.fs").c_str() );
 	m_geometryPass.link();
 
 	m_lightingPass.generateProgramObject();
-	m_lightingPass.attachVertexShader( getAssetFilePath("Defered/LightPass.vs").c_str() );
-	m_lightingPass.attachFragmentShader( getAssetFilePath("Defered/LightPass.fs").c_str() );
+	m_lightingPass.attachVertexShader( getAssetFilePath("Deferred/LightPass.vs").c_str() );
+	m_lightingPass.attachFragmentShader( getAssetFilePath("Deferred/LightPass.fs").c_str() );
 	m_lightingPass.link();
 
 	m_shader_arcCircle.generateProgramObject();
@@ -133,7 +133,7 @@ void A3::createShaderProgram()
 }
 
 //----------------------------------------------------------------------------------------
-void A3::enableVertexShaderInputSlots()
+void clusterLOD::enableVertexShaderInputSlots()
 {
 	//-- Enable input slots for m_vao_meshData:
 	{
@@ -163,7 +163,7 @@ void A3::enableVertexShaderInputSlots()
 }
 
 //----------------------------------------------------------------------------------------
-void A3::uploadVertexDataToVbos (
+void clusterLOD::uploadVertexDataToVbos (
 		const MeshConsolidator & meshConsolidator
 ) {
 	// Generate VBO to store all vertex position data
@@ -212,7 +212,7 @@ void A3::uploadVertexDataToVbos (
 }
 
 //----------------------------------------------------------------------------------------
-void A3::mapVboDataToVertexShaderInputLocations()
+void clusterLOD::mapVboDataToVertexShaderInputLocations()
 {
 	// Bind VAO in order to record the data mapping.
 	glBindVertexArray(m_vao_meshData);
@@ -249,7 +249,7 @@ void A3::mapVboDataToVertexShaderInputLocations()
 }
 
 //----------------------------------------------------------------------------------------
-void A3::initPerspectiveMatrix()
+void clusterLOD::initPerspectiveMatrix()
 {
 	float aspect = ((float)m_windowWidth) / m_windowHeight;
 	m_perpsective = glm::perspective(degreesToRadians(60.0f), aspect, 0.1f, 100.0f);
@@ -257,13 +257,13 @@ void A3::initPerspectiveMatrix()
 
 
 //----------------------------------------------------------------------------------------
-void A3::initViewMatrix() {
+void clusterLOD::initViewMatrix() {
 	m_view = glm::lookAt(vec3(0.0f, 0.0f, 0.0f), vec3(0.0f, 0.0f, -1.0f),
 			vec3(0.0f, 1.0f, 0.0f));
 }
 
 //----------------------------------------------------------------------------------------
-void A3::initLightSources() {
+void clusterLOD::initLightSources() {
 	m_lights.clear();
     //World-space position
     for (int x = -1; x <= 1; x += 2) {
@@ -285,7 +285,7 @@ void A3::initLightSources() {
     }
 }
 
-void A3::OneLightSource(){
+void clusterLOD::OneLightSource(){
 	// setup a simple point light
 	m_lights.clear();
 	LightSource light;
@@ -294,7 +294,7 @@ void A3::OneLightSource(){
 	m_lights.push_back(light);
 }
 
-void A3::addRandomLightSource(){
+void clusterLOD::addRandomLightSource(){
 	// Randomly generate a light source inside -10 to 10 cube and with random color
 	if(m_lights.size() >= 256){
 		std::cout << "Cannot add more than 256 light sources" << std::endl;
@@ -309,13 +309,13 @@ void A3::addRandomLightSource(){
 	m_lights.push_back(light);
 }
 
-void A3::addTenRandomLightSource(){
+void clusterLOD::addTenRandomLightSource(){
 	for(int i = 0; i < 10; i++){
 		addRandomLightSource();
 	}
 }
 
-void A3::removeLightSource(int i){
+void clusterLOD::removeLightSource(int i){
 	if(i >= m_lights.size() || i < 0){
 		std::cout << "Cannot remove light source at index " << i << std::endl;
 		return;
@@ -324,7 +324,7 @@ void A3::removeLightSource(int i){
 	m_lights.erase(m_lights.begin() + i);
 }
 
-void A3::removeTenLightSource(){
+void clusterLOD::removeTenLightSource(){
 	for(int i = 0; i < 10; i++){
 		if(m_lights.size() == 0){
 			std::cout << "No more light sources to remove" << std::endl;
@@ -334,7 +334,7 @@ void A3::removeTenLightSource(){
 	}
 }
 
-void A3::dynamicLightSource(){
+void clusterLOD::dynamicLightSource(){
 	// Move the light source in a circle
 	for(int i = 0; i < m_lights.size(); i++){
 		// dynamically move the light source in a spherical path with different angles
@@ -349,7 +349,7 @@ void A3::dynamicLightSource(){
 }
 
 //----------------------------------------------------------------------------------------
-void A3::uploadCommonSceneUniforms() {
+void clusterLOD::uploadCommonSceneUniforms() {
 	int pick = 0;
 	if(m_controlMode == ControlMode::JOINTS) pick = m_rootNode->totalSceneNodes();
 	m_geometryPass.enable();
@@ -403,7 +403,7 @@ void A3::uploadCommonSceneUniforms() {
 /*
  * Called once per frame, before guiLogic().
  */
-void A3::appLogic()
+void clusterLOD::appLogic()
 {
 	// Place per frame, application logic here ...
 	uploadCommonSceneUniforms();
@@ -435,7 +435,7 @@ void A3::appLogic()
 /*
  * Called once per frame, after appLogic(), but before the draw() method.
  */
-void A3::guiLogic()
+void clusterLOD::guiLogic()
 {
 	if( !show_gui ) {
 		return;
@@ -530,7 +530,7 @@ void A3::guiLogic()
 /*
  * Called once per frame, after guiLogic().
  */
-void A3::draw() {
+void clusterLOD::draw() {
 	renderSceneGraph(*m_rootNode);
 
 	if(m_enableCircle) {
@@ -539,7 +539,7 @@ void A3::draw() {
 }
 
 //----------------------------------------------------------------------------------------
-void A3::renderSceneGraph(const SceneNode & root) {
+void clusterLOD::renderSceneGraph(const SceneNode & root) {
 	// Geometry pass
 	m_gBuffer.bind();
 	glClearColor(0.0, 0.0, 0.0, 0.0);
@@ -611,7 +611,7 @@ void A3::renderSceneGraph(const SceneNode & root) {
 
 //----------------------------------------------------------------------------------------
 // Draw the trackball circle.
-void A3::renderArcCircle() {
+void clusterLOD::renderArcCircle() {
 	glBindVertexArray(m_vao_arcCircle);
 
 	m_shader_arcCircle.enable();
@@ -635,7 +635,7 @@ void A3::renderArcCircle() {
 /*
  * Called once, after program is signaled to terminate.
  */
-void A3::cleanup()
+void clusterLOD::cleanup()
 {
 
 }
@@ -644,7 +644,7 @@ void A3::cleanup()
 /*
  * Event handler.  Handles cursor entering the window area events.
  */
-bool A3::cursorEnterWindowEvent (
+bool clusterLOD::cursorEnterWindowEvent (
 		int entered
 ) {
 	bool eventHandled(false);
@@ -658,7 +658,7 @@ bool A3::cursorEnterWindowEvent (
 /*
  * Event handler.  Handles mouse cursor movement events.
  */
-bool A3::mouseMoveEvent (
+bool clusterLOD::mouseMoveEvent (
 		double xPos,
 		double yPos
 ) {
@@ -719,7 +719,7 @@ bool A3::mouseMoveEvent (
 /*
  * Event handler.  Handles mouse button events.
  */
-bool A3::mouseButtonInputEvent (
+bool clusterLOD::mouseButtonInputEvent (
 		int button,
 		int actions,
 		int mods
@@ -782,7 +782,7 @@ bool A3::mouseButtonInputEvent (
 /*
  * Event handler.  Handles mouse scroll wheel events.
  */
-bool A3::mouseScrollEvent (
+bool clusterLOD::mouseScrollEvent (
 		double xOffSet,
 		double yOffSet
 ) {
@@ -797,7 +797,7 @@ bool A3::mouseScrollEvent (
 /*
  * Event handler.  Handles window resize events.
  */
-bool A3::windowResizeEvent (
+bool clusterLOD::windowResizeEvent (
 		int width,
 		int height
 ) {
@@ -810,7 +810,7 @@ bool A3::windowResizeEvent (
 /*
  * Event handler.  Handles key input events.
  */
-bool A3::keyInputEvent (
+bool clusterLOD::keyInputEvent (
 		int key,
 		int action,
 		int mods
@@ -865,7 +865,7 @@ bool A3::keyInputEvent (
 }
 
 //----------------------------------------------------------------------------------------
-void A3::resetControls(){
+void clusterLOD::resetControls(){
 	m_enableCircle = true;
 	m_enableZBuffer = true;
 	m_enableBackFaceCull = false;
@@ -885,7 +885,7 @@ void A3::resetControls(){
 	m_jointNodes.clear();
 }
 
-void A3::reset(){
+void clusterLOD::reset(){
 	resetControls();
 	m_rootNode->restoreInitialTrans();
 }

@@ -23,10 +23,10 @@ struct LightSource {
 };
 
 
-class A3 : public CS488Window {
+class clusterLOD : public CS488Window {
 public:
-	A3(const std::string & luaSceneFile);
-	virtual ~A3();
+	clusterLOD(const std::string & luaSceneFile);
+	virtual ~clusterLOD();
 
 protected:
 	virtual void init() override;
