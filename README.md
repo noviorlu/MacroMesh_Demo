@@ -15,7 +15,7 @@
     * http://glm.g-truc.net/0.9.7/index.html
 * ImGui
     * https://github.com/ocornut/imgui
-
+* METIS
 
 ---
 
@@ -59,3 +59,6 @@ Sorry for all of the hardcore Microsoft fans out there.  We have not had time to
     $ make: *** [Makefile:37: imgui] Error 2
 
 goto file **build/imgui.make**, change **$(CC)** into **gcc**
+
+I strongly Recemmond using vcpkg to install all necessary packages.
+vcpkg install egl-registry gklib glew glfw3 glm lua metis opengl-registry opengl stb tinyobjloader vcpkg-cmake-config vcpkg-cmake

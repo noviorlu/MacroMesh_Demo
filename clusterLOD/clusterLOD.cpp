@@ -68,16 +68,16 @@ void clusterLOD::init()
 	// this list in order to support rendering additional mesh types.  All vertex
 	// positions, and normals will be extracted and stored within the MeshConsolidator
 	// class.
-	unique_ptr<MeshConsolidator> meshConsolidator (new MeshConsolidator{
-			getAssetFilePath("../../models/bunny/bunny.obj")
-	});
-
-
+	 m_meshConsolidator = std::make_unique<MeshConsolidator>(
+        std::initializer_list<std::string>{
+            getAssetFilePath("../../models/bunny/bunny.obj")
+        }
+    );
 	// Acquire the BatchInfoMap from the MeshConsolidator.
-	meshConsolidator->getBatchInfoMap(m_batchInfoMap);
+	m_meshConsolidator->getBatchInfoMap(m_batchInfoMap);
 
 	// Take all vertex data within the MeshConsolidator and upload it to VBOs on the GPU.
-	uploadVertexDataToVbos(*meshConsolidator);
+	uploadVertexDataToVbos(*m_meshConsolidator);
 
 	mapVboDataToVertexShaderInputLocations();
 

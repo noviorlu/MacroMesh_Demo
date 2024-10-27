@@ -51,10 +51,14 @@ if os.get() == "windows" then
         "kernel32",
         "shell32",
         "Imm32",
-        "lua"
+        "lua",
+        "metis",
+        "gklib"
     }
     table.insert(includeDirList, "C:/projects/vcpkg/installed/x64-windows/include")
+    table.insert(includeDirList, "C:/projects/vcpkg/installed/x86-mingw-static/include")
     table.insert(libDirectories, "C:/projects/vcpkg/installed/x64-windows/lib")
+    table.insert(libDirectories, "C:/projects/vcpkg/installed/x86-mingw-static/lib")
 end
 
 -- Build Options:
