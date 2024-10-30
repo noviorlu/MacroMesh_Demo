@@ -64,19 +64,19 @@ void clusterLOD::init()
 
 	processLuaSceneFile(m_luaSceneFile);
 
-	// Load and decode all .obj files at once here.  You may add additional .obj files to
-	// this list in order to support rendering additional mesh types.  All vertex
-	// positions, and normals will be extracted and stored within the MeshConsolidator
-	// class.
-	m_meshConsolidator = std::make_unique<MeshConsolidator>(
+
+
+	m_meshConsolidator = new Mesh(
         std::initializer_list<std::string>{
             getAssetFilePath("../../models/bunny/bunny.obj")
         }
     );
-	// Acquire the MeshInfoMap from the MeshConsolidator.
+	// Acquire the MeshInfoMap from the Mesh.
 	m_meshConsolidator->uploadToGPU();
 
-	// Take all vertex data within the MeshConsolidator and upload it to VBOs on the GPU.
+	// Mesh::partitionMETIS(*m_meshConsolidator, 1, m_clusterList);
+
+	// Take all vertex data within the Mesh and upload it to VBOs on the GPU.
 	uploadVertexDataToVbos(*m_meshConsolidator);
 	mapVboDataToVertexShaderInputLocations();
 
@@ -149,9 +149,8 @@ void clusterLOD::enableVertexShaderInputSlots()
 
 //----------------------------------------------------------------------------------------
 void clusterLOD::uploadVertexDataToVbos (
-		const MeshConsolidator & meshConsolidator
+		const Mesh & meshConsolidator
 ) {
-	CHECK_GL_ERRORS;
 	// Generate VBO to store the trackball circle.
 	{
 		glGenBuffers( 1, &m_vbo_arcCircle );
@@ -532,7 +531,6 @@ void clusterLOD::renderSceneGraph(const SceneNode & root) {
 		// print pixelColor
 		std::cout << "pixelColor: " << pixelColor[0] << " " << pixelColor[1] << " " << pixelColor[2] << " " << pixelColor[3] << std::endl;
 		pickedID = (int)pixelColor[3];
-
 
 		selectedPick = false;
 	}

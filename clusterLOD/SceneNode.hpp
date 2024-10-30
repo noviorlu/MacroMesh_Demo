@@ -5,7 +5,7 @@
 #include "Material.hpp"
 #include "cs488-framework/OpenGLImport.hpp"
 #include "cs488-framework/ShaderProgram.hpp"
-#include "cs488-framework/MeshConsolidator.hpp"
+#include "cs488-framework/Mesh.hpp"
 
 #include <glm/glm.hpp>
 

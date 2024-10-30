@@ -5,8 +5,6 @@
 #include <vector>
 #include <memory>
 
-#include "cs488-framework/MeshConsolidator.hpp"
-
 class Cluster : public std::enable_shared_from_this<Cluster> {
 public:
     int id;

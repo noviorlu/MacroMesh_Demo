@@ -6,7 +6,7 @@
 // all at once given a start index offset into the vertex buffer, and a number
 // of indices to be rendered.
 
-class MeshConsolidator;
+class Mesh;
 
 struct BatchInfo {
 
@@ -17,6 +17,6 @@ struct BatchInfo {
 	// Number of indices to be rendered for this batch.
 	unsigned int numIndices;
 
-	MeshConsolidator* meshConsolidator;
+	Mesh* meshConsolidator;
 };
 

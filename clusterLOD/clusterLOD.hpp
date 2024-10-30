@@ -5,7 +5,7 @@
 #include "cs488-framework/CS488Window.hpp"
 #include "cs488-framework/OpenGLImport.hpp"
 #include "cs488-framework/ShaderProgram.hpp"
-#include "cs488-framework/MeshConsolidator.hpp"
+#include "cs488-framework/Mesh.hpp"
 
 #include "SceneNode.hpp"
 #include "JointNode.hpp"
@@ -49,7 +49,7 @@ protected:
 	void processLuaSceneFile(const std::string & filename);
 	void createShaderProgram();
 	void enableVertexShaderInputSlots();
-	void uploadVertexDataToVbos(const MeshConsolidator & meshConsolidator);
+	void uploadVertexDataToVbos(const Mesh & meshConsolidator);
 	void mapVboDataToVertexShaderInputLocations();
 	void initViewMatrix();
 	void initLightSources();
@@ -90,10 +90,9 @@ protected:
 	ShaderProgram m_lightingPass;
 
 
-	// MeshInfoMap is an associative container that maps a unique MeshId to a BatchInfo
-	// object. Each BatchInfo object contains an index offset and the number of indices
-	// required to render the mesh with identifier MeshId.
-	unique_ptr<MeshConsolidator> m_meshConsolidator;
+
+	Mesh* m_meshConsolidator;
+	std::vector<Mesh> m_clusterList;
 
 	std::string m_luaSceneFile;
 

@@ -1,4 +1,4 @@
-#include "MeshConsolidator.hpp"
+#include "Mesh.hpp"
 using namespace glm;
 using namespace std;
 
@@ -10,18 +10,18 @@ using namespace std;
 
 #include <iostream>
 
-MeshInfoMap MeshConsolidator::s_meshInfoMap;
+MeshInfoMap Mesh::s_meshInfoMap;
 
 //----------------------------------------------------------------------------------------
 // Default constructor
-MeshConsolidator::MeshConsolidator()
+Mesh::Mesh()
 {
 
 }
 
 //----------------------------------------------------------------------------------------
 // Destructor
-MeshConsolidator::~MeshConsolidator()
+Mesh::~Mesh()
 {
 
 }
@@ -40,11 +40,11 @@ static void appendVector (
 
 
 //----------------------------------------------------------------------------------------
-MeshConsolidator::MeshConsolidator(
+Mesh::Mesh(
 		std::initializer_list<ObjFilePath> objFileList
 ) {
 	if(objFileList.size() != 1) {
-		throw Exception("Error within MeshConsolidator: objFileList.size() != 1\n");
+		throw Exception("Error within Mesh: objFileList.size() != 1\n");
 	}
 	MeshId meshId;
 	BatchInfo batchInfo;
@@ -65,29 +65,29 @@ MeshConsolidator::MeshConsolidator(
 
 //----------------------------------------------------------------------------------------
 // Returns the starting memory location for vertex position data.
-const float * MeshConsolidator::getVertexPositionDataPtr() const {
+const float * Mesh::getVertexPositionDataPtr() const {
 	return &(m_vertexPositionData[0].x);
 }
 
 //----------------------------------------------------------------------------------------
 // Returns the starting memory location for vertex normal data.
-const float * MeshConsolidator::getVertexNormalDataPtr() const {
+const float * Mesh::getVertexNormalDataPtr() const {
     return &(m_vertexNormalData[0].x);
 }
 
 //----------------------------------------------------------------------------------------
 // Returns the total number of bytes of all vertex position data.
-size_t MeshConsolidator::getNumVertexPositionBytes() const {
+size_t Mesh::getNumVertexPositionBytes() const {
 	return m_vertexPositionData.size() * sizeof(vec3);
 }
 
 //----------------------------------------------------------------------------------------
 // Returns the total number of bytes of all vertex normal data.
-size_t MeshConsolidator::getNumVertexNormalBytes() const {
+size_t Mesh::getNumVertexNormalBytes() const {
 	return m_vertexNormalData.size() * sizeof(vec3);
 }
 
-void MeshConsolidator::uploadToGPU() {
+void Mesh::uploadToGPU() {
     std::vector<Vertex> vertexData;
     vertexData.reserve(m_vertexPositionData.size());
 
@@ -129,7 +129,7 @@ void MeshConsolidator::uploadToGPU() {
 }
 
 
-void MeshConsolidator::draw() const {
+void Mesh::draw() const {
     glBindVertexArray(m_vao);
     
     #if ENABLE_IBO == true

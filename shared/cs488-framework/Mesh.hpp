@@ -23,20 +23,20 @@ typedef std::string ObjFilePath;
 // MeshInfoMap is an associative container that maps a unique MeshId to a BatchInfo
 // object. Each BatchInfo object contains an index offset and the number of indices
 // required to render the mesh with identifier MeshId.
-class MeshConsolidator;
-typedef std::unordered_map<MeshId, MeshConsolidator*>  MeshInfoMap;
+class Mesh;
+typedef std::unordered_map<MeshId, Mesh*>  MeshInfoMap;
 
 
 /*
 * Class for consolidating all vertex data within a list of .obj files.
 */
-class MeshConsolidator {
+class Mesh {
 public:
-	MeshConsolidator();
+	Mesh();
 
-	MeshConsolidator(std::initializer_list<ObjFilePath>  objFileList);
+	Mesh(std::initializer_list<ObjFilePath>  objFileList);
 
-	~MeshConsolidator();
+	~Mesh();
 
 	const float * getVertexPositionDataPtr() const;
 
@@ -50,7 +50,7 @@ public:
 
 	void draw() const;
 
-	static void partitionMETIS(const MeshConsolidator & src, const size_t numClusters, std::vector<MeshConsolidator> & clusterList);
+	static void partitionMETIS(const Mesh & src, const size_t numClusters, std::vector<Mesh> & clusterList);
 
 	static MeshInfoMap s_meshInfoMap;
 

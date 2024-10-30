@@ -53,7 +53,7 @@ void GeometryNode::draw(
 	auto id4 = shader.getUniformLocation("nodeId");
 	glUniform1i(id4, m_nodeId);
 
-	MeshConsolidator::s_meshInfoMap[meshId]->draw();
+	Mesh::s_meshInfoMap[meshId]->draw();
 
 	shader.disable();
 }
