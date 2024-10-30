@@ -102,10 +102,10 @@ void SceneNode::rotate(char axis, float angle) {
 
 void SceneNode::draw(
         const glm::mat4& modelMatrix, const glm::mat4& viewMatrix, 
-        const ShaderProgram& shader, BatchInfoMap& modelBatch) const
+        const ShaderProgram& shader) const
 {
 	for (const SceneNode* child : children) {
-		child->draw(modelMatrix * trans, viewMatrix, shader, modelBatch);
+		child->draw(modelMatrix * trans, viewMatrix, shader);
 	}
 }
 

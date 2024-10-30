@@ -1,7 +1,9 @@
 #pragma once
 
 #include "cs488-framework/BatchInfo.hpp"
+#include "cs488-framework/OpenGLImport.hpp"
 
+#include "cs488-framework/Vertex.hpp"
 #include <glm/glm.hpp>
 
 #include <initializer_list>
@@ -9,7 +11,7 @@
 #include <unordered_map>
 #include <string>
 
-
+#define ENABLE_IBO true
 
 // String identifier for a mesh.
 typedef std::string  MeshId;
@@ -18,10 +20,11 @@ typedef std::string  MeshId;
 typedef std::string ObjFilePath;
 
 
-// BatchInfoMap is an associative container that maps a unique MeshId to a BatchInfo
+// MeshInfoMap is an associative container that maps a unique MeshId to a BatchInfo
 // object. Each BatchInfo object contains an index offset and the number of indices
 // required to render the mesh with identifier MeshId.
-typedef std::unordered_map<MeshId, BatchInfo>  BatchInfoMap;
+class MeshConsolidator;
+typedef std::unordered_map<MeshId, MeshConsolidator*>  MeshInfoMap;
 
 
 /*
@@ -43,14 +46,24 @@ public:
 
 	size_t getNumVertexNormalBytes() const;
 
-	void getBatchInfoMap(BatchInfoMap & batchInfoMap) const;
+	void uploadToGPU();
 
+	void draw() const;
+
+	static void partitionMETIS(const MeshConsolidator & src, const size_t numClusters, std::vector<MeshConsolidator> & clusterList);
+
+	static MeshInfoMap s_meshInfoMap;
 
 private:
 	std::vector<glm::vec3> m_vertexPositionData;
 	std::vector<glm::vec3> m_vertexNormalData;
+	std::vector<glm::vec2> m_vertexUVData;
 
-	BatchInfoMap m_batchInfoMap;
+	std::vector<unsigned int> m_indexData;
+
+	GLuint m_vbo;
+	GLuint m_vao;
+	GLuint m_ibo;
 };
 
 

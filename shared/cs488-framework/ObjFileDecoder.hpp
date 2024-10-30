@@ -1,5 +1,7 @@
 #pragma once
 
+#include "cs488-framework/Vertex.hpp"
+
 #include <glm/glm.hpp>
 #include <vector>
 #include <string>
@@ -26,7 +28,6 @@ public:
             std::vector<glm::vec2> & uvCoords
     );
 
-
 	/**
 	* Extracts vertex data from a Wavefront .obj file
 	* If an object name parameter is present in the .obj file, objectName is set to that,
@@ -42,6 +43,16 @@ public:
 			std::string & objectName,
             std::vector<glm::vec3> & positions,
             std::vector<glm::vec3> & normals
+    );
+
+
+	static void decode(
+		    const char * objFilePath,
+			std::string & objectName,
+			std::vector<glm::vec3> & positions,
+			std::vector<glm::vec3> & normals,
+			std::vector<glm::vec2> & uvCoords,
+			std::vector<unsigned int> & indices
     );
 
 };

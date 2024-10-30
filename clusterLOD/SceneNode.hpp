@@ -40,7 +40,7 @@ public:
 
     virtual void draw(
         const glm::mat4& modelMatrix, const glm::mat4& viewMatrix, 
-        const ShaderProgram& shader, BatchInfoMap& modelBatch) const;
+        const ShaderProgram& shader) const;
 
 	//-- Transformations:
     virtual void rotate(char axis, float angle);

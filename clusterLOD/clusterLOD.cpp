@@ -68,17 +68,16 @@ void clusterLOD::init()
 	// this list in order to support rendering additional mesh types.  All vertex
 	// positions, and normals will be extracted and stored within the MeshConsolidator
 	// class.
-	 m_meshConsolidator = std::make_unique<MeshConsolidator>(
+	m_meshConsolidator = std::make_unique<MeshConsolidator>(
         std::initializer_list<std::string>{
             getAssetFilePath("../../models/bunny/bunny.obj")
         }
     );
-	// Acquire the BatchInfoMap from the MeshConsolidator.
-	m_meshConsolidator->getBatchInfoMap(m_batchInfoMap);
+	// Acquire the MeshInfoMap from the MeshConsolidator.
+	m_meshConsolidator->uploadToGPU();
 
 	// Take all vertex data within the MeshConsolidator and upload it to VBOs on the GPU.
 	uploadVertexDataToVbos(*m_meshConsolidator);
-
 	mapVboDataToVertexShaderInputLocations();
 
 	initPerspectiveMatrix();
@@ -135,20 +134,6 @@ void clusterLOD::createShaderProgram()
 //----------------------------------------------------------------------------------------
 void clusterLOD::enableVertexShaderInputSlots()
 {
-	//-- Enable input slots for m_vao_meshData:
-	{
-		glBindVertexArray(m_vao_meshData);
-
-		// Enable the vertex shader attribute location for "position" when rendering.
-		m_positionAttribLocation = m_geometryPass.getAttribLocation("inPosition");
-		glEnableVertexAttribArray(m_positionAttribLocation);
-
-		// Enable the vertex shader attribute location for "normal" when rendering.
-		m_normalAttribLocation = m_geometryPass.getAttribLocation("inNormal");
-		glEnableVertexAttribArray(m_normalAttribLocation);
-	}
-
-
 	//-- Enable input slots for m_vao_arcCircle:
 	{
 		glBindVertexArray(m_vao_arcCircle);
@@ -166,32 +151,7 @@ void clusterLOD::enableVertexShaderInputSlots()
 void clusterLOD::uploadVertexDataToVbos (
 		const MeshConsolidator & meshConsolidator
 ) {
-	// Generate VBO to store all vertex position data
-	{
-		glGenBuffers(1, &m_vbo_vertexPositions);
-
-		glBindBuffer(GL_ARRAY_BUFFER, m_vbo_vertexPositions);
-
-		glBufferData(GL_ARRAY_BUFFER, meshConsolidator.getNumVertexPositionBytes(),
-				meshConsolidator.getVertexPositionDataPtr(), GL_STATIC_DRAW);
-
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		CHECK_GL_ERRORS;
-	}
-
-	// Generate VBO to store all vertex normal data
-	{
-		glGenBuffers(1, &m_vbo_vertexNormals);
-
-		glBindBuffer(GL_ARRAY_BUFFER, m_vbo_vertexNormals);
-
-		glBufferData(GL_ARRAY_BUFFER, meshConsolidator.getNumVertexNormalBytes(),
-				meshConsolidator.getVertexNormalDataPtr(), GL_STATIC_DRAW);
-
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		CHECK_GL_ERRORS;
-	}
-
+	CHECK_GL_ERRORS;
 	// Generate VBO to store the trackball circle.
 	{
 		glGenBuffers( 1, &m_vbo_arcCircle );
@@ -214,25 +174,6 @@ void clusterLOD::uploadVertexDataToVbos (
 //----------------------------------------------------------------------------------------
 void clusterLOD::mapVboDataToVertexShaderInputLocations()
 {
-	// Bind VAO in order to record the data mapping.
-	glBindVertexArray(m_vao_meshData);
-
-	// Tell GL how to map data from the vertex buffer "m_vbo_vertexPositions" into the
-	// "position" vertex attribute location for any bound vertex shader program.
-	glBindBuffer(GL_ARRAY_BUFFER, m_vbo_vertexPositions);
-	glVertexAttribPointer(m_positionAttribLocation, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
-
-	// Tell GL how to map data from the vertex buffer "m_vbo_vertexNormals" into the
-	// "normal" vertex attribute location for any bound vertex shader program.
-	glBindBuffer(GL_ARRAY_BUFFER, m_vbo_vertexNormals);
-	glVertexAttribPointer(m_normalAttribLocation, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
-
-	//-- Unbind target, and restore default values:
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindVertexArray(0);
-
-	CHECK_GL_ERRORS;
-
 	// Bind VAO in order to record the data mapping.
 	glBindVertexArray(m_vao_arcCircle);
 
@@ -571,7 +512,7 @@ void clusterLOD::renderSceneGraph(const SceneNode & root) {
 	CHECK_GL_ERRORS;
 
 	glBindVertexArray(m_vao_meshData);
-	root.draw(glm::mat4(1.0f), m_view, m_geometryPass, m_batchInfoMap);
+	root.draw(glm::mat4(1.0f), m_view, m_geometryPass);
 	glBindVertexArray(0);
 	CHECK_GL_ERRORS;
 

@@ -14,8 +14,7 @@ public:
 	void draw(
 		const glm::mat4 & modelMatrix,
 		const glm::mat4 & viewMatrix,
-		const ShaderProgram & shader,
-		BatchInfoMap & modelBatch
+		const ShaderProgram & shader
 	) const override;
 
 	Material material;

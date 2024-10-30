@@ -5,6 +5,9 @@
 // setup so that all batch vertices are contiguous in memory and can be rendered
 // all at once given a start index offset into the vertex buffer, and a number
 // of indices to be rendered.
+
+class MeshConsolidator;
+
 struct BatchInfo {
 
 	// Starting index within an associated vertex buffer denoting the start
@@ -14,5 +17,6 @@ struct BatchInfo {
 	// Number of indices to be rendered for this batch.
 	unsigned int numIndices;
 
+	MeshConsolidator* meshConsolidator;
 };
 

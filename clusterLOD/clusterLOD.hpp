@@ -90,11 +90,10 @@ protected:
 	ShaderProgram m_lightingPass;
 
 
-	// BatchInfoMap is an associative container that maps a unique MeshId to a BatchInfo
+	// MeshInfoMap is an associative container that maps a unique MeshId to a BatchInfo
 	// object. Each BatchInfo object contains an index offset and the number of indices
 	// required to render the mesh with identifier MeshId.
 	unique_ptr<MeshConsolidator> m_meshConsolidator;
-	BatchInfoMap m_batchInfoMap;
 
 	std::string m_luaSceneFile;
 

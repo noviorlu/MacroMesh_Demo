@@ -5,6 +5,12 @@ using namespace std;
 #include "cs488-framework/Exception.hpp"
 #include "cs488-framework/ObjFileDecoder.hpp"
 
+#include "cs488-framework/OpenGLImport.hpp"
+#include "cs488-framework/GlErrorCheck.hpp"
+
+#include <iostream>
+
+MeshInfoMap MeshConsolidator::s_meshInfoMap;
 
 //----------------------------------------------------------------------------------------
 // Default constructor
@@ -37,41 +43,24 @@ static void appendVector (
 MeshConsolidator::MeshConsolidator(
 		std::initializer_list<ObjFilePath> objFileList
 ) {
-
+	if(objFileList.size() != 1) {
+		throw Exception("Error within MeshConsolidator: objFileList.size() != 1\n");
+	}
 	MeshId meshId;
-	vector<vec3> positions;
-	vector<vec3> normals;
 	BatchInfo batchInfo;
-	unsigned long indexOffset(0);
+	
+	const ObjFilePath & objFile = *objFileList.begin();
 
-    for(const ObjFilePath & objFile : objFileList) {
-	    ObjFileDecoder::decode(objFile.c_str(), meshId, positions, normals);
+#if ENABLE_IBO == true
+	ObjFileDecoder::decode(objFile.c_str(), meshId, m_vertexPositionData, m_vertexNormalData, m_vertexUVData, m_indexData);
+	batchInfo.numIndices = m_indexData.size();
+#else
+	ObjFileDecoder::decode(objFile.c_str(), meshId, m_vertexPositionData, m_vertexNormalData, m_vertexUVData);
+	batchInfo.numIndices = m_vertexPositionData.size();
+#endif
 
-	    uint numIndices = positions.size();
-
-	    if (numIndices != normals.size()) {
-		    throw Exception("Error within MeshConsolidator: "
-					"positions.size() != normals.size()\n");
-	    }
-
-	    batchInfo.startIndex = indexOffset;
-	    batchInfo.numIndices = numIndices;
-
-	    m_batchInfoMap[meshId] = batchInfo;
-
-	    appendVector(m_vertexPositionData, positions);
-	    appendVector(m_vertexNormalData, normals);
-
-	    indexOffset += numIndices;
-    }
-
-}
-
-//----------------------------------------------------------------------------------------
-void MeshConsolidator::getBatchInfoMap (
-		BatchInfoMap & batchInfoMap
-) const {
-	batchInfoMap = m_batchInfoMap;
+	batchInfo.startIndex = 0;
+	s_meshInfoMap[meshId] = this;
 }
 
 //----------------------------------------------------------------------------------------
@@ -96,4 +85,58 @@ size_t MeshConsolidator::getNumVertexPositionBytes() const {
 // Returns the total number of bytes of all vertex normal data.
 size_t MeshConsolidator::getNumVertexNormalBytes() const {
 	return m_vertexNormalData.size() * sizeof(vec3);
+}
+
+void MeshConsolidator::uploadToGPU() {
+    std::vector<Vertex> vertexData;
+    vertexData.reserve(m_vertexPositionData.size());
+
+    for (unsigned int i = 0; i < m_vertexPositionData.size(); i++) {
+        Vertex vertex = {
+            m_vertexPositionData[i],
+            m_vertexNormalData[i],
+            m_vertexUVData[i]
+        };
+        vertexData.push_back(vertex);
+    }
+
+    glGenVertexArrays(1, &m_vao);
+    glBindVertexArray(m_vao);
+
+    glGenBuffers(1, &m_vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
+    glBufferData(GL_ARRAY_BUFFER, vertexData.size() * sizeof(Vertex), vertexData.data(), GL_STATIC_DRAW);
+
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
+
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
+
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, uv));
+
+#if ENABLE_IBO == true
+    glGenBuffers(1, &m_ibo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_ibo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, m_indexData.size() * sizeof(unsigned int), m_indexData.data(), GL_STATIC_DRAW);
+#endif
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    glBindVertexArray(0);
+    CHECK_GL_ERRORS;
+}
+
+
+void MeshConsolidator::draw() const {
+    glBindVertexArray(m_vao);
+    
+    #if ENABLE_IBO == true
+        glDrawElements(GL_TRIANGLES, m_indexData.size(), GL_UNSIGNED_INT, 0);
+    #else
+        glDrawArrays(GL_TRIANGLES, 0, m_vertexPositionData.size());
+    #endif
+    
+    glBindVertexArray(0);
 }

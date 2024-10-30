@@ -25,7 +25,7 @@ GeometryNode::GeometryNode(
 
 void GeometryNode::draw(
 	const glm::mat4 & modelMatrix, const glm::mat4 &viewMatrix, 
-	const ShaderProgram &shader, BatchInfoMap &modelBatch) const
+	const ShaderProgram &shader) const
 {
 	shader.enable();
 	
@@ -53,9 +53,7 @@ void GeometryNode::draw(
 	auto id4 = shader.getUniformLocation("nodeId");
 	glUniform1i(id4, m_nodeId);
 
-	BatchInfo batchInfo = modelBatch[meshId];
+	MeshConsolidator::s_meshInfoMap[meshId]->draw();
 
-	//-- Now render the mesh:
-	glDrawArrays(GL_TRIANGLES, batchInfo.startIndex, batchInfo.numIndices);
 	shader.disable();
 }
