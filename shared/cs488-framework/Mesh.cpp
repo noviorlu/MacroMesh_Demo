@@ -63,29 +63,6 @@ Mesh::Mesh(
 	s_meshInfoMap[meshId] = this;
 }
 
-//----------------------------------------------------------------------------------------
-// Returns the starting memory location for vertex position data.
-const float * Mesh::getVertexPositionDataPtr() const {
-	return &(m_vertexPositionData[0].x);
-}
-
-//----------------------------------------------------------------------------------------
-// Returns the starting memory location for vertex normal data.
-const float * Mesh::getVertexNormalDataPtr() const {
-    return &(m_vertexNormalData[0].x);
-}
-
-//----------------------------------------------------------------------------------------
-// Returns the total number of bytes of all vertex position data.
-size_t Mesh::getNumVertexPositionBytes() const {
-	return m_vertexPositionData.size() * sizeof(vec3);
-}
-
-//----------------------------------------------------------------------------------------
-// Returns the total number of bytes of all vertex normal data.
-size_t Mesh::getNumVertexNormalBytes() const {
-	return m_vertexNormalData.size() * sizeof(vec3);
-}
 
 void Mesh::uploadToGPU() {
     std::vector<Vertex> vertexData;

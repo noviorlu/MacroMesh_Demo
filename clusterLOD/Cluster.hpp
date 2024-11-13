@@ -1,5 +1,4 @@
-#ifndef CLUSTER_HPP
-#define CLUSTER_HPP
+#pragma once
 
 #include <iostream>
 #include <vector>
@@ -10,6 +9,9 @@
 class Cluster : public std::enable_shared_from_this<Cluster> {
 public:
     float Error;
+    
+    Mesh m_mesh;
+
     Cluster(float Error) : Error(Error) {}
 
     ~Cluster() {}
@@ -24,5 +26,3 @@ public:
         clusters.push_back(cluster);
     }
 };
-
-#endif // CLUSTER_HPP

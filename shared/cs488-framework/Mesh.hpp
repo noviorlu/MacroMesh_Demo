@@ -38,19 +38,9 @@ public:
 
 	~Mesh();
 
-	const float * getVertexPositionDataPtr() const;
-
-	const float * getVertexNormalDataPtr() const;
-
-	size_t getNumVertexPositionBytes() const;
-
-	size_t getNumVertexNormalBytes() const;
-
 	void uploadToGPU();
 
 	void draw() const;
-
-	static void partitionMETIS(const Mesh & src, const size_t numClusters, std::vector<Mesh> & clusterList);
 
 	static MeshInfoMap s_meshInfoMap;
 
