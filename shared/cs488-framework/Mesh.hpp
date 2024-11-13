@@ -40,11 +40,12 @@ public:
 
 	void uploadToGPU();
 
+	void removeFromGPU();
+
 	void draw() const;
 
 	static MeshInfoMap s_meshInfoMap;
 
-private:
 	std::vector<glm::vec3> m_vertexPositionData;
 	std::vector<glm::vec3> m_vertexNormalData;
 	std::vector<glm::vec2> m_vertexUVData;

@@ -105,6 +105,13 @@ void Mesh::uploadToGPU() {
     CHECK_GL_ERRORS;
 }
 
+void Mesh::removeFromGPU() {
+    glDeleteBuffers(1, &m_vbo);
+    glDeleteVertexArrays(1, &m_vao);
+#if ENABLE_IBO == true
+    glDeleteBuffers(1, &m_ibo);
+#endif
+}
 
 void Mesh::draw() const {
     glBindVertexArray(m_vao);

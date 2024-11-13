@@ -6,6 +6,8 @@
 
 #include "Mesh.hpp"
 
+#define N 256
+
 class Cluster : public std::enable_shared_from_this<Cluster> {
 public:
     float Error;
@@ -26,3 +28,8 @@ public:
         clusters.push_back(cluster);
     }
 };
+
+void MeshSplitter(Mesh& mesh, std::vector<Cluster> &clusters);
+
+std::vector<std::vector<size_t>> 
+BuildAdjacencyList(const std::vector<unsigned int>& m_indexData);
