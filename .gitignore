@@ -35,3 +35,8 @@ A4_[Ss]olution/A4
 *exe
 *lib
 *dll
+
+proposal/*
+!proposal/proposal.pdf
+!proposal/proposal.tex
+!proposal/refereneces.bib
