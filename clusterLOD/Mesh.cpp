@@ -149,12 +149,12 @@ void Mesh::removeFromGPU() {
 }
 
 void Mesh::draw() const {
-    if(m_clusterList.size() > 0) {
-        for (const Cluster& cluster : m_clusterList) {
-            cluster.m_mesh->draw();
-        }
-        return;
-    }
+    // if(m_clusterList.size() > 0) {
+    //     for (const Cluster& cluster : m_clusterList) {
+    //         cluster.m_mesh->draw();
+    //     }
+    //     return;
+    // }
 
     glBindVertexArray(m_vao);
     

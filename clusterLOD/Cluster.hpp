@@ -29,7 +29,7 @@ public:
     }
 };
 
-void MeshSplitter(const Mesh& mesh, std::vector<Cluster>& clusters, int num_parts);
+void MeshSplitter(Mesh& mesh, std::vector<Cluster>& clusters, int num_parts);
 
 std::vector<std::vector<size_t>> 
 BuildAdjacencyList(const std::vector<unsigned int>& m_indexData);

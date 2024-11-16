@@ -25,6 +25,10 @@ void main() {
         FragColor = vec4(0.0);
         return;
     }
+    else{
+        FragColor = vec4(1.0);
+        return;
+    }
 
     vec3 lighting = vec3(0.0);
 

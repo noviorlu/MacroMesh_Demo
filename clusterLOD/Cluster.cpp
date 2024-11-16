@@ -5,7 +5,7 @@
 #include <set>
 #include <algorithm>
 
-void MeshSplitter(const Mesh& mesh, std::vector<Cluster>& clusters, int num_parts) {
+void MeshSplitter(Mesh& mesh, std::vector<Cluster>& clusters, int num_parts) {
     // 创建邻接列表
     auto adjacency_list = BuildAdjacencyList(mesh.m_indexData);
     idx_t num_elements = mesh.m_indexData.size() / 3; // 节点数量（三角形数量）
@@ -57,10 +57,29 @@ void MeshSplitter(const Mesh& mesh, std::vector<Cluster>& clusters, int num_part
         partition_map[partition_result[i]].push_back(i);
     }
 
-    for(auto& entry : partition_map) {
-        Mesh* new_mesh = new Mesh(mesh, entry.second);
-        clusters.push_back(Cluster(0, new_mesh));
-    }
+    // const std::vector<unsigned int>& triList = partition_map[0];
+    // // Remove all other triangles in m_indexData except the triList
+    
+    // std::vector<unsigned int> new_indexData;
+    // for (unsigned int tri : triList) {
+    //     new_indexData.push_back(mesh.m_indexData[3 * tri]);
+    //     new_indexData.push_back(mesh.m_indexData[3 * tri + 1]);
+    //     new_indexData.push_back(mesh.m_indexData[3 * tri + 2]);
+    // }
+    // mesh.m_indexData = std::move(new_indexData);
+
+    // // print the triangle indices data
+    // for (size_t i = 0; i < mesh.m_indexData.size(); i += 3) {
+    //     std::cout << mesh.m_indexData[i] << " " 
+    //               << mesh.m_indexData[i + 1] << " " 
+    //               << mesh.m_indexData[i + 2] << std::endl;
+    // }
+
+
+    // for(auto& entry : partition_map) {
+    //     Mesh* new_mesh = new Mesh(mesh, entry.second);
+    //     clusters.push_back(Cluster(0, new_mesh));
+    // }
 }
 
 struct pair_hash {
