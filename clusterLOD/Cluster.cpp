@@ -1,24 +1,21 @@
 #include "Cluster.hpp"
 #include <iostream>
 #include <metis.h>
-#include <tuple>
 #include <unordered_map>
 #include <set>
+#include <algorithm>
 
-
-void MeshSplitter(Mesh& mesh, std::vector<Cluster>& clusters, int num_parts) {
+void MeshSplitter(const Mesh& mesh, std::vector<Cluster>& clusters, int num_parts) {
     // 创建邻接列表
     auto adjacency_list = BuildAdjacencyList(mesh.m_indexData);
-    std::vector<int> partition_result; // 存储分区结果
+    idx_t num_elements = mesh.m_indexData.size() / 3; // 节点数量（三角形数量）
+    idx_t num_constraints = 1;                        // 通常为 1
 
-    // 计算三角形数量
-    idx_t num_elements = mesh.m_indexData.size() / 3;
-    idx_t num_constraints = 1;
-    idx_t objval;
+    std::vector<idx_t> xadj(num_elements + 1, 0);     // 邻接起始索引数组
+    std::vector<idx_t> adjncy;                        // 邻接节点数组
 
-    // 初始化 METIS 的 xadj 和 adjncy 数组
-    std::vector<idx_t> xadj(num_elements + 1, 0);
-    std::vector<idx_t> adjncy;
+    std::vector<idx_t> partition_result(num_elements); // 存储分区结果
+    idx_t objval;                                      // 分区目标值
 
     // 构建 xadj 和 adjncy 数组
     for (size_t i = 0; i < num_elements; ++i) {
@@ -31,45 +28,62 @@ void MeshSplitter(Mesh& mesh, std::vector<Cluster>& clusters, int num_parts) {
     // 初始化分区结果数组
     partition_result.resize(num_elements);
 
-    // 调用 METIS_PartGraphKway 进行分区
-    int result = METIS_PartGraphKway(&num_elements,       // 节点数量（三角形数量）
-                                     &num_constraints,    // 约束数量
-                                     xadj.data(),         // 邻接关系的起始索引
-                                     adjncy.data(),       // 邻接节点
-                                     NULL, NULL, NULL,    // 权重参数（可设为 NULL）
-                                     &num_parts,          // 目标簇数量
-                                     NULL, NULL,          // 选项（可设为 NULL）
-                                     &objval,             // 输出目标值
-                                     partition_result.data()); // 输出的分区结果
+    // 调用 METIS_PartGraphKway
+    int result = METIS_PartGraphKway(
+        &num_elements,             // 节点数量
+        &num_constraints,          // 约束数量
+        xadj.data(),               // 邻接关系的起始索引
+        adjncy.data(),             // 邻接节点
+        NULL,                      // 顶点权重（可为 NULL）
+        NULL,                      // 节点大小（可为 NULL）
+        NULL,                      // 边权重（可为 NULL）
+        &num_parts,                // 目标簇数量
+        NULL,                      // 每个分区的目标权重（可为 NULL）
+        NULL,                      // 不平衡向量（可为 NULL）
+        NULL,                      // 选项（可为 NULL）
+        &objval,                   // 输出目标值
+        partition_result.data()    // 输出的分区结果
+    );
 
-    if (result != METIS_OK) {
+    if (result == METIS_OK) {
+        std::cout << "Partitioning successful!" << std::endl;
+    } else {
         std::cerr << "Partitioning failed with error code: " << result << std::endl;
-        return;
     }
-    
-    std::cout << "Partitioning successful!" << std::endl;
 
-    // 将分区结果组织到 clusters 中
-    clusters.resize(num_parts);
-    for (size_t i = 0; i < partition_result.size(); ++i) {
-        int cluster_id = partition_result[i];
-        clusters[cluster_id].triangles.push_back(mesh.m_indexData[i * 3]);
-        clusters[cluster_id].triangles.push_back(mesh.m_indexData[i * 3 + 1]);
-        clusters[cluster_id].triangles.push_back(mesh.m_indexData[i * 3 + 2]);
+    // group partitioning
+    std::unordered_map<idx_t, std::vector<unsigned int>> partition_map;
+    for (size_t i = 0; i < num_elements; ++i) {
+        partition_map[partition_result[i]].push_back(i);
+    }
+
+    for(auto& entry : partition_map) {
+        Mesh* new_mesh = new Mesh(mesh, entry.second);
+        clusters.push_back(Cluster(0, new_mesh));
     }
 }
+
+struct pair_hash {
+    template <class T1, class T2>
+    std::size_t operator()(const std::pair<T1, T2>& p) const {
+        auto hash1 = std::hash<T1>{}(p.first);
+        auto hash2 = std::hash<T2>{}(p.second);
+        return hash1 ^ (hash2 << 1); // Combine the two hashes
+    }
+};
+
 std::vector<std::vector<size_t>> 
 BuildAdjacencyList(const std::vector<unsigned int>& m_indexData) 
 {
     std::vector<std::vector<size_t>> adjacency_list;
-    std::unordered_map<std::tuple<size_t, size_t>, std::vector<size_t>> edge_to_triangles;
+    std::unordered_map<std::pair<size_t, size_t>, std::vector<size_t>, pair_hash> edge_to_triangles;
 
     // 每三个索引表示一个三角形
     size_t num_triangles = m_indexData.size() / 3;
     
     // 辅助函数，用于生成有序的边
     auto make_edge = [](size_t a, size_t b) {
-        return std::make_tuple(std::min(a, b), std::max(a, b));
+        return std::make_pair(std::min(a, b), std::max(a, b));
     };
 
     // 构建边到三角形的映射

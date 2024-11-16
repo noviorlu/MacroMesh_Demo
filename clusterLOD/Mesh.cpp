@@ -1,4 +1,5 @@
 #include "Mesh.hpp"
+#include "Cluster.hpp"
 using namespace glm;
 using namespace std;
 
@@ -8,6 +9,7 @@ using namespace std;
 #include "cs488-framework/OpenGLImport.hpp"
 #include "cs488-framework/GlErrorCheck.hpp"
 
+#include <unordered_map>
 #include <iostream>
 
 MeshInfoMap Mesh::s_meshInfoMap;
@@ -63,6 +65,39 @@ Mesh::Mesh(
 	s_meshInfoMap[meshId] = this;
 }
 
+namespace std {
+    template<>
+    struct hash<glm::vec3> {
+        std::size_t operator()(const glm::vec3& v) const noexcept {
+            // 简单组合哈希函数
+            std::hash<float> floatHasher;
+            size_t h1 = floatHasher(v.x);
+            size_t h2 = floatHasher(v.y);
+            size_t h3 = floatHasher(v.z);
+            return h1 ^ (h2 << 1) ^ (h3 << 2); // 合并哈希值
+        }
+    };
+}
+
+Mesh::Mesh(const Mesh& other, const std::vector<unsigned int>& triangleIndices) {
+    std::unordered_map<glm::vec3, unsigned int> vertexMap;
+    
+    for (unsigned int triIdx : triangleIndices) {
+        for (size_t i = 0; i < 3; ++i) {
+            unsigned int idx = other.m_indexData[3 * triIdx + i];
+            
+            glm::vec3 vertex = other.m_vertexPositionData[idx];
+            if (vertexMap.find(vertex) == vertexMap.end()) {
+                unsigned int newIdx = m_vertexPositionData.size();
+                vertexMap[vertex] = newIdx;
+                m_vertexPositionData.push_back(vertex);
+                m_vertexNormalData.push_back(other.m_vertexNormalData[idx]);
+                m_vertexUVData.push_back(other.m_vertexUVData[idx]);
+            }
+            m_indexData.push_back(vertexMap[vertex]);
+        }
+    }
+}
 
 void Mesh::uploadToGPU() {
     std::vector<Vertex> vertexData;
@@ -114,6 +149,13 @@ void Mesh::removeFromGPU() {
 }
 
 void Mesh::draw() const {
+    if(m_clusterList.size() > 0) {
+        for (const Cluster& cluster : m_clusterList) {
+            cluster.m_mesh->draw();
+        }
+        return;
+    }
+
     glBindVertexArray(m_vao);
     
     #if ENABLE_IBO == true

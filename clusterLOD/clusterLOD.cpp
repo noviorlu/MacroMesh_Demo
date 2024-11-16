@@ -9,6 +9,8 @@ using namespace std;
 #include "GeometryNode.hpp"
 #include "JointNode.hpp"
 
+#include "Cluster.hpp"
+
 #include <imgui/imgui.h>
 
 #include <glm/gtc/type_ptr.hpp>
@@ -71,13 +73,17 @@ void clusterLOD::init()
             getAssetFilePath("../../models/bunny/bunny.obj")
         }
     );
+
+	MeshSplitter(*m_meshConsolidator, m_meshConsolidator->m_clusterList, 256);
+
+	for(auto& cluster : m_meshConsolidator->m_clusterList) {
+		cluster.m_mesh->uploadToGPU();
+	}
+
 	// Acquire the MeshInfoMap from the Mesh.
-	m_meshConsolidator->uploadToGPU();
+	// m_meshConsolidator->uploadToGPU();
 
-	// Mesh::partitionMETIS(*m_meshConsolidator, 1, m_clusterList);
-
-	// Take all vertex data within the Mesh and upload it to VBOs on the GPU.
-	uploadVertexDataToVbos(*m_meshConsolidator);
+	uploadVertexDataToVbos();
 	mapVboDataToVertexShaderInputLocations();
 
 	initPerspectiveMatrix();
@@ -148,9 +154,7 @@ void clusterLOD::enableVertexShaderInputSlots()
 }
 
 //----------------------------------------------------------------------------------------
-void clusterLOD::uploadVertexDataToVbos (
-		const Mesh & meshConsolidator
-) {
+void clusterLOD::uploadVertexDataToVbos () {
 	// Generate VBO to store the trackball circle.
 	{
 		glGenBuffers( 1, &m_vbo_arcCircle );

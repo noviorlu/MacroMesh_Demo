@@ -1,0 +1,1 @@
+./cluster.exe ./Assets/simpleScene.lua

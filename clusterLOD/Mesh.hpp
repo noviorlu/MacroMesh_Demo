@@ -26,6 +26,7 @@ typedef std::string ObjFilePath;
 class Mesh;
 typedef std::unordered_map<MeshId, Mesh*>  MeshInfoMap;
 
+class Cluster;
 
 /*
 * Class for consolidating all vertex data within a list of .obj files.
@@ -35,6 +36,8 @@ public:
 	Mesh();
 
 	Mesh(std::initializer_list<ObjFilePath>  objFileList);
+
+	Mesh(const Mesh& other, const std::vector<unsigned int>& triangleIndices);
 
 	~Mesh();
 
@@ -51,6 +54,8 @@ public:
 	std::vector<glm::vec2> m_vertexUVData;
 
 	std::vector<unsigned int> m_indexData;
+
+	std::vector<Cluster> m_clusterList;
 
 	GLuint m_vbo;
 	GLuint m_vao;

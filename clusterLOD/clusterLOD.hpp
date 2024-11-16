@@ -5,7 +5,7 @@
 #include "cs488-framework/CS488Window.hpp"
 #include "cs488-framework/OpenGLImport.hpp"
 #include "cs488-framework/ShaderProgram.hpp"
-#include "cs488-framework/Mesh.hpp"
+#include "Mesh.hpp"
 
 #include "SceneNode.hpp"
 #include "JointNode.hpp"
@@ -49,7 +49,7 @@ protected:
 	void processLuaSceneFile(const std::string & filename);
 	void createShaderProgram();
 	void enableVertexShaderInputSlots();
-	void uploadVertexDataToVbos(const Mesh & meshConsolidator);
+	void uploadVertexDataToVbos();
 	void mapVboDataToVertexShaderInputLocations();
 	void initViewMatrix();
 	void initLightSources();
@@ -89,10 +89,7 @@ protected:
 	ShaderProgram m_geometryPass;
 	ShaderProgram m_lightingPass;
 
-
-
 	Mesh* m_meshConsolidator;
-	std::vector<Mesh> m_clusterList;
 
 	std::string m_luaSceneFile;
 
