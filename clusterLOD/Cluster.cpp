@@ -5,7 +5,7 @@
 #include <set>
 #include <algorithm>
 
-void MeshSplitter(Mesh& mesh, int num_parts) {
+void MeshSplitter(Mesh& mesh) {
     // 创建邻接列表
     auto adjacency_list = BuildAdjacencyList(mesh.m_indexData);
     idx_t num_elements = mesh.m_indexData.size() / 3; // 节点数量（三角形数量）
@@ -27,6 +27,12 @@ void MeshSplitter(Mesh& mesh, int num_parts) {
 
     // 初始化分区结果数组
     partition_result.resize(num_elements);
+
+    float counting_parts = float(mesh.m_indexData.size() / 3.0f / MAXN_CLUSTER);
+    int num_parts = static_cast<int>(std::ceil(static_cast<float>(mesh.m_indexData.size()) / 3.0f / MAXN_CLUSTER));
+
+    // output information about howmany cluster it's going to generate
+    std::cout << "Generating " << num_parts << " clusters" << std::endl;
 
     // 调用 METIS_PartGraphKway
     int result = METIS_PartGraphKway(
@@ -57,8 +63,6 @@ void MeshSplitter(Mesh& mesh, int num_parts) {
         partition_map[partition_result[i]].push_back(i);
     }
 
-    // mesh.m_clusterList.push_back(Cluster(0, mesh, partition_map[0]));
-    // mesh.m_clusterList.push_back(Cluster(0, mesh, partition_map[2]));
     for(auto& entry : partition_map) {
         mesh.m_clusterList.push_back(Cluster(0, mesh, entry.second));
     }
@@ -160,8 +164,15 @@ Cluster::Cluster(
     // generate a random hue (h) in [0, 1)
     float h = static_cast<float>(rand()) / RAND_MAX; // 随机色相
     float s = 0.8f; // 固定饱和度，接近鲜艳的颜色
-    float v = 0.9f; // 固定亮度
+    float v = 0.8f; // 固定亮度
 
     // convert HSV to RGB
     rdColor = HSVtoRGB(h, s, v);
+}
+
+void Cluster::draw(const ShaderProgram& shader) const {
+    CHECK_GL_ERRORS;
+    shader.SetUniform3fv("material.kd", rdColor);
+    CHECK_GL_ERRORS;
+    Mesh::draw(shader);
 }

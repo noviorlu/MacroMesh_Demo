@@ -74,11 +74,7 @@ void clusterLOD::init()
         }
     );
 
-	MeshSplitter(*m_meshConsolidator, 256);
-
-	// for(auto& cluster : m_meshConsolidator->m_clusterList) {
-	// 	cluster.m_mesh->uploadToGPU();
-	// }
+	MeshSplitter(*m_meshConsolidator);
 
 	// Acquire the MeshInfoMap from the Mesh.
 	m_meshConsolidator->uploadToGPU();
