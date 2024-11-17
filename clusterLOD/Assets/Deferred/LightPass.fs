@@ -26,7 +26,7 @@ void main() {
         return;
     }
     else{
-        FragColor = vec4(1.0);
+        FragColor = vec4(Albedo.rgb, 1.0);
         return;
     }
 

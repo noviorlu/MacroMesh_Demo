@@ -2,6 +2,7 @@
 
 #include "cs488-framework/BatchInfo.hpp"
 #include "cs488-framework/OpenGLImport.hpp"
+#include "cs488-framework/ShaderProgram.hpp"
 
 #include "cs488-framework/Vertex.hpp"
 #include <glm/glm.hpp>
@@ -10,6 +11,8 @@
 #include <vector>
 #include <unordered_map>
 #include <string>
+#include <iomanip> // For formatted output
+#include <sstream> // For easier testing/debugging
 
 #define ENABLE_IBO true
 
@@ -45,7 +48,7 @@ public:
 
 	void removeFromGPU();
 
-	void draw() const;
+	virtual void draw(const ShaderProgram& shader) const;
 
 	static MeshInfoMap s_meshInfoMap;
 
@@ -60,6 +63,7 @@ public:
 	GLuint m_vbo;
 	GLuint m_vao;
 	GLuint m_ibo;
-};
 
+	friend std::ostream& operator<<(std::ostream& os, const Mesh& mesh);
+};
 

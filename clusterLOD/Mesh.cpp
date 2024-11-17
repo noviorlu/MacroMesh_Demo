@@ -79,27 +79,32 @@ namespace std {
     };
 }
 
-Mesh::Mesh(const Mesh& other, const std::vector<unsigned int>& triangleIndices) {
-    std::unordered_map<glm::vec3, unsigned int> vertexMap;
-    
-    for (unsigned int triIdx : triangleIndices) {
-        for (size_t i = 0; i < 3; ++i) {
-            unsigned int idx = other.m_indexData[3 * triIdx + i];
-            
-            glm::vec3 vertex = other.m_vertexPositionData[idx];
-            if (vertexMap.find(vertex) == vertexMap.end()) {
-                unsigned int newIdx = m_vertexPositionData.size();
-                vertexMap[vertex] = newIdx;
-                m_vertexPositionData.push_back(vertex);
-                m_vertexNormalData.push_back(other.m_vertexNormalData[idx]);
-                m_vertexUVData.push_back(other.m_vertexUVData[idx]);
+Mesh::Mesh(const Mesh& mesh, const std::vector<unsigned int>& triList) {
+    std::unordered_map<unsigned int, unsigned int> vertexMap;
+    for (unsigned int tri : triList) {
+        for (int i = 0; i < 3; ++i) {
+            unsigned int oldIndex = mesh.m_indexData[3 * tri + i]; // 获取旧的顶点索引
+
+            if (vertexMap.find(oldIndex) == vertexMap.end()) {
+                vertexMap[oldIndex] = m_vertexPositionData.size(); // 映射到新索引
+                m_vertexPositionData.push_back(mesh.m_vertexPositionData[oldIndex]);
+                m_vertexNormalData.push_back(mesh.m_vertexNormalData[oldIndex]);
+                m_vertexUVData.push_back(mesh.m_vertexUVData[oldIndex]);
             }
-            m_indexData.push_back(vertexMap[vertex]);
+
+            m_indexData.push_back(vertexMap[oldIndex]);
         }
     }
 }
 
 void Mesh::uploadToGPU() {
+    if(m_clusterList.size() > 0) {
+        for(Cluster& cluster : m_clusterList) {
+            cluster.uploadToGPU();
+        }
+        return;
+    }
+
     std::vector<Vertex> vertexData;
     vertexData.reserve(m_vertexPositionData.size());
 
@@ -138,6 +143,7 @@ void Mesh::uploadToGPU() {
 
     glBindVertexArray(0);
     CHECK_GL_ERRORS;
+
 }
 
 void Mesh::removeFromGPU() {
@@ -148,13 +154,13 @@ void Mesh::removeFromGPU() {
 #endif
 }
 
-void Mesh::draw() const {
-    // if(m_clusterList.size() > 0) {
-    //     for (const Cluster& cluster : m_clusterList) {
-    //         cluster.m_mesh->draw();
-    //     }
-    //     return;
-    // }
+void Mesh::draw(const ShaderProgram& shader) const {
+    if(m_clusterList.size() > 0) {
+        for (const Cluster& cluster : m_clusterList) {
+            cluster.draw(shader);
+        }
+        return;
+    }
 
     glBindVertexArray(m_vao);
     
@@ -165,4 +171,45 @@ void Mesh::draw() const {
     #endif
     
     glBindVertexArray(0);
+}
+
+std::ostream& operator<<(std::ostream& os, const Mesh& mesh) {
+    os << "Mesh Info:" << std::endl;
+    os << "  Vertices: " << mesh.m_vertexPositionData.size() << std::endl;
+    os << "  Triangles: " << mesh.m_indexData.size() / 3 << std::endl;
+
+    // 输出顶点数据
+    os << "  Vertex Data:" << std::endl;
+    for (size_t i = 0; i < mesh.m_vertexPositionData.size(); ++i) {
+        os << "    Vertex " << i << ": "
+           << "Position(" << mesh.m_vertexPositionData[i].x << ", "
+           << mesh.m_vertexPositionData[i].y << ", "
+           << mesh.m_vertexPositionData[i].z << "), "
+           << "Normal(" << mesh.m_vertexNormalData[i].x << ", "
+           << mesh.m_vertexNormalData[i].y << ", "
+           << mesh.m_vertexNormalData[i].z << "), ";
+        if (i < mesh.m_vertexUVData.size()) {
+            os << "UV(" << mesh.m_vertexUVData[i].x << ", " << mesh.m_vertexUVData[i].y << ")";
+        } else {
+            os << "UV(None)";
+        }
+        os << std::endl;
+    }
+
+    // 输出索引数据
+    os << "  Index Data (Triangles):" << std::endl;
+    for (size_t i = 0; i < mesh.m_indexData.size(); i += 3) {
+        os << "    Triangle " << i / 3 << ": ["
+           << mesh.m_indexData[i] << ", "
+           << mesh.m_indexData[i + 1] << ", "
+           << mesh.m_indexData[i + 2] << "]" << std::endl;
+    }
+
+    // 输出 Cluster 信息
+    os << "  Clusters: " << mesh.m_clusterList.size() << std::endl;
+    for (size_t i = 0; i < mesh.m_clusterList.size(); ++i) {
+        os << "    Cluster " << i << ": (Details depend on Cluster implementation)" << std::endl;
+    }
+
+    return os;
 }

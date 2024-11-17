@@ -3,33 +3,44 @@
 #include <iostream>
 #include <vector>
 #include <memory>
-
+#include "cs488-framework/GlErrorCheck.hpp"
 #include "Mesh.hpp"
 
 #define N 256
 
-class Cluster : public std::enable_shared_from_this<Cluster> {
+class Cluster : public Mesh {
 public:
     float Error;
     
-    Mesh* m_mesh;
+    glm::vec3 rdColor;
 
-    Cluster(float Error, Mesh* mesh) : Error(Error), m_mesh(mesh) {}
+    Cluster(
+        float Error, 
+        const Mesh& ref, 
+        const std::vector<unsigned int>& triIndices
+    );
 
-    ~Cluster() {if(m_mesh != nullptr) delete m_mesh;}
-};
+    ~Cluster() {}
 
-class ClusterGroup {
-public:
-    float Error;
-    std::vector<std::shared_ptr<Cluster>> clusters;
-
-    void addCluster(std::shared_ptr<Cluster> cluster) {
-        clusters.push_back(cluster);
+	void draw(const ShaderProgram& shader) const override{
+        CHECK_GL_ERRORS;
+        shader.SetUniform3fv("material.kd", rdColor);
+        CHECK_GL_ERRORS;
+        Mesh::draw(shader);
     }
 };
 
-void MeshSplitter(Mesh& mesh, std::vector<Cluster>& clusters, int num_parts);
+// class ClusterGroup {
+// public:
+//     float Error;
+//     std::vector<std::shared_ptr<Cluster>> clusters;
+
+//     void addCluster(std::shared_ptr<Cluster> cluster) {
+//         clusters.push_back(cluster);
+//     }
+// };
+
+void MeshSplitter(Mesh& mesh, int num_parts);
 
 std::vector<std::vector<size_t>> 
 BuildAdjacencyList(const std::vector<unsigned int>& m_indexData);

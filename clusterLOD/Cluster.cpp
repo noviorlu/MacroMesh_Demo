@@ -5,7 +5,7 @@
 #include <set>
 #include <algorithm>
 
-void MeshSplitter(Mesh& mesh, std::vector<Cluster>& clusters, int num_parts) {
+void MeshSplitter(Mesh& mesh, int num_parts) {
     // 创建邻接列表
     auto adjacency_list = BuildAdjacencyList(mesh.m_indexData);
     idx_t num_elements = mesh.m_indexData.size() / 3; // 节点数量（三角形数量）
@@ -57,29 +57,11 @@ void MeshSplitter(Mesh& mesh, std::vector<Cluster>& clusters, int num_parts) {
         partition_map[partition_result[i]].push_back(i);
     }
 
-    // const std::vector<unsigned int>& triList = partition_map[0];
-    // // Remove all other triangles in m_indexData except the triList
-    
-    // std::vector<unsigned int> new_indexData;
-    // for (unsigned int tri : triList) {
-    //     new_indexData.push_back(mesh.m_indexData[3 * tri]);
-    //     new_indexData.push_back(mesh.m_indexData[3 * tri + 1]);
-    //     new_indexData.push_back(mesh.m_indexData[3 * tri + 2]);
-    // }
-    // mesh.m_indexData = std::move(new_indexData);
-
-    // // print the triangle indices data
-    // for (size_t i = 0; i < mesh.m_indexData.size(); i += 3) {
-    //     std::cout << mesh.m_indexData[i] << " " 
-    //               << mesh.m_indexData[i + 1] << " " 
-    //               << mesh.m_indexData[i + 2] << std::endl;
-    // }
-
-
-    // for(auto& entry : partition_map) {
-    //     Mesh* new_mesh = new Mesh(mesh, entry.second);
-    //     clusters.push_back(Cluster(0, new_mesh));
-    // }
+    // mesh.m_clusterList.push_back(Cluster(0, mesh, partition_map[0]));
+    // mesh.m_clusterList.push_back(Cluster(0, mesh, partition_map[2]));
+    for(auto& entry : partition_map) {
+        mesh.m_clusterList.push_back(Cluster(0, mesh, entry.second));
+    }
 }
 
 struct pair_hash {
@@ -149,4 +131,37 @@ BuildAdjacencyList(const std::vector<unsigned int>& m_indexData)
     }
 
     return adjacency_list;
+}
+
+glm::vec3 HSVtoRGB(float h, float s, float v) {
+    h = fmod(h, 1.0f) * 6.0f;  // 将 h 限制在 [0, 6)
+    int i = static_cast<int>(floor(h));
+    float f = h - i; // 小数部分
+    float p = v * (1.0f - s);
+    float q = v * (1.0f - f * s);
+    float t = v * (1.0f - (1.0f - f) * s);
+
+    switch (i) {
+        case 0: return glm::vec3(v, t, p);
+        case 1: return glm::vec3(q, v, p);
+        case 2: return glm::vec3(p, v, t);
+        case 3: return glm::vec3(p, q, v);
+        case 4: return glm::vec3(t, p, v);
+        case 5: return glm::vec3(v, p, q);
+        default: return glm::vec3(0.0f, 0.0f, 0.0f); // 容错
+    }
+}
+
+Cluster::Cluster(
+    float Error, 
+    const Mesh& ref, 
+    const std::vector<unsigned int>& triIndices
+) : Error(Error), Mesh(ref, triIndices) {
+    // generate a random hue (h) in [0, 1)
+    float h = static_cast<float>(rand()) / RAND_MAX; // 随机色相
+    float s = 0.8f; // 固定饱和度，接近鲜艳的颜色
+    float v = 0.9f; // 固定亮度
+
+    // convert HSV to RGB
+    rdColor = HSVtoRGB(h, s, v);
 }

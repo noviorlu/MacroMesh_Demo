@@ -27,7 +27,7 @@ void GeometryNode::draw(
 	const glm::mat4 & modelMatrix, const glm::mat4 &viewMatrix, 
 	const ShaderProgram &shader) const
 {
-	shader.enable();
+	// shader.enable();
 	
 	//-- Set ModelView matrix:
 	mat4 modelView = viewMatrix * modelMatrix * trans;
@@ -48,7 +48,7 @@ void GeometryNode::draw(
 	//-- Set SceneNode ID:
 	shader.SetUniform1i("nodeId", m_nodeId);
 
-	Mesh::s_meshInfoMap[meshId]->draw();
+	Mesh::s_meshInfoMap[meshId]->draw(shader);
 
-	shader.disable();
+	// shader.disable();
 }

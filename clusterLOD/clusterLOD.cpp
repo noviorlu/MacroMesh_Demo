@@ -74,7 +74,7 @@ void clusterLOD::init()
         }
     );
 
-	MeshSplitter(*m_meshConsolidator, m_meshConsolidator->m_clusterList, 256);
+	MeshSplitter(*m_meshConsolidator, 256);
 
 	// for(auto& cluster : m_meshConsolidator->m_clusterList) {
 	// 	cluster.m_mesh->uploadToGPU();
@@ -477,7 +477,7 @@ void clusterLOD::draw() {
 void clusterLOD::renderSceneGraph(const SceneNode & root) {
 	// Geometry pass
 	m_gBuffer.bind();
-	glClearColor(0.0, 0.0, 0.0, 0.0);
+	glClearColor(0.0, 0.0, 0.0, 1.0);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	
 	// REALLY IMPORTANT!!!!! if blend on, the GBuffer texture automatically unify
@@ -506,7 +506,9 @@ void clusterLOD::renderSceneGraph(const SceneNode & root) {
 	CHECK_GL_ERRORS;
 
 	glBindVertexArray(m_vao_meshData);
+	m_geometryPass.enable();
 	root.draw(glm::mat4(1.0f), m_view, m_geometryPass);
+	m_geometryPass.disable();
 	glBindVertexArray(0);
 	CHECK_GL_ERRORS;
 
