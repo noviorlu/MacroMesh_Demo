@@ -6,7 +6,8 @@
 #include "cs488-framework/GlErrorCheck.hpp"
 #include "Mesh.hpp"
 
-#define MAXN_CLUSTER 256
+#define MAX_TRI_IN_CLUSTER 256
+#define MAXN_CLUSTER_IN_CLUSTERGROUP 32
 
 class Cluster : public Mesh {
 public:

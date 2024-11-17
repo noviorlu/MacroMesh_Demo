@@ -5,6 +5,47 @@
 #include <set>
 #include <algorithm>
 
+glm::vec3 HSVtoRGB(float h, float s, float v) {
+    h = fmod(h, 1.0f) * 6.0f;  // 将 h 限制在 [0, 6)
+    int i = static_cast<int>(floor(h));
+    float f = h - i; // 小数部分
+    float p = v * (1.0f - s);
+    float q = v * (1.0f - f * s);
+    float t = v * (1.0f - (1.0f - f) * s);
+
+    switch (i) {
+        case 0: return glm::vec3(v, t, p);
+        case 1: return glm::vec3(q, v, p);
+        case 2: return glm::vec3(p, v, t);
+        case 3: return glm::vec3(p, q, v);
+        case 4: return glm::vec3(t, p, v);
+        case 5: return glm::vec3(v, p, q);
+        default: return glm::vec3(0.0f, 0.0f, 0.0f); // 容错
+    }
+}
+
+Cluster::Cluster(
+    float Error, 
+    const Mesh& ref, 
+    const std::vector<unsigned int>& triIndices
+) : Error(Error), Mesh(ref, triIndices) {
+    // generate a random hue (h) in [0, 1)
+    float h = static_cast<float>(rand()) / RAND_MAX; // 随机色相
+    float s = 0.8f; // 固定饱和度，接近鲜艳的颜色
+    float v = 0.8f; // 固定亮度
+
+    // convert HSV to RGB
+    rdColor = HSVtoRGB(h, s, v);
+}
+
+void Cluster::draw(const ShaderProgram& shader) const {
+    CHECK_GL_ERRORS;
+    shader.SetUniform3fv("material.kd", rdColor);
+    CHECK_GL_ERRORS;
+    Mesh::draw(shader);
+}
+
+
 void MeshSplitter(Mesh& mesh) {
     // 创建邻接列表
     auto adjacency_list = BuildAdjacencyList(mesh.m_indexData);
@@ -28,8 +69,8 @@ void MeshSplitter(Mesh& mesh) {
     // 初始化分区结果数组
     partition_result.resize(num_elements);
 
-    float counting_parts = float(mesh.m_indexData.size() / 3.0f / MAXN_CLUSTER);
-    int num_parts = static_cast<int>(std::ceil(static_cast<float>(mesh.m_indexData.size()) / 3.0f / MAXN_CLUSTER));
+    float counting_parts = float(mesh.m_indexData.size() / 3.0f / MAX_TRI_IN_CLUSTER);
+    int num_parts = static_cast<int>(std::ceil(static_cast<float>(mesh.m_indexData.size()) / 3.0f / MAX_TRI_IN_CLUSTER));
 
     // output information about howmany cluster it's going to generate
     std::cout << "Generating " << num_parts << " clusters" << std::endl;
@@ -66,6 +107,13 @@ void MeshSplitter(Mesh& mesh) {
     for(auto& entry : partition_map) {
         mesh.m_clusterList.push_back(Cluster(0, mesh, entry.second));
     }
+
+    mesh.m_vertexNormalData.clear();
+    mesh.m_vertexPositionData.clear();
+    mesh.m_vertexUVData.clear();
+    mesh.m_indexData.clear();
+
+    mesh.m_vertexNormalData.shrink_to_fit();
 }
 
 struct pair_hash {
@@ -137,42 +185,8 @@ BuildAdjacencyList(const std::vector<unsigned int>& m_indexData)
     return adjacency_list;
 }
 
-glm::vec3 HSVtoRGB(float h, float s, float v) {
-    h = fmod(h, 1.0f) * 6.0f;  // 将 h 限制在 [0, 6)
-    int i = static_cast<int>(floor(h));
-    float f = h - i; // 小数部分
-    float p = v * (1.0f - s);
-    float q = v * (1.0f - f * s);
-    float t = v * (1.0f - (1.0f - f) * s);
-
-    switch (i) {
-        case 0: return glm::vec3(v, t, p);
-        case 1: return glm::vec3(q, v, p);
-        case 2: return glm::vec3(p, v, t);
-        case 3: return glm::vec3(p, q, v);
-        case 4: return glm::vec3(t, p, v);
-        case 5: return glm::vec3(v, p, q);
-        default: return glm::vec3(0.0f, 0.0f, 0.0f); // 容错
-    }
+void ClusterPartition(Mesh& mesh){
+    
 }
 
-Cluster::Cluster(
-    float Error, 
-    const Mesh& ref, 
-    const std::vector<unsigned int>& triIndices
-) : Error(Error), Mesh(ref, triIndices) {
-    // generate a random hue (h) in [0, 1)
-    float h = static_cast<float>(rand()) / RAND_MAX; // 随机色相
-    float s = 0.8f; // 固定饱和度，接近鲜艳的颜色
-    float v = 0.8f; // 固定亮度
 
-    // convert HSV to RGB
-    rdColor = HSVtoRGB(h, s, v);
-}
-
-void Cluster::draw(const ShaderProgram& shader) const {
-    CHECK_GL_ERRORS;
-    shader.SetUniform3fv("material.kd", rdColor);
-    CHECK_GL_ERRORS;
-    Mesh::draw(shader);
-}
