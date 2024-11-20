@@ -24,18 +24,18 @@ glm::vec3 HSVtoRGB(float h, float s, float v) {
     }
 }
 
-Cluster::Cluster(
-    float Error, 
-    const Mesh& ref, 
-    const std::vector<unsigned int>& triIndices
-) : Error(Error), Mesh(ref, triIndices) {
+glm::vec3 genRdColor(){
     // generate a random hue (h) in [0, 1)
     float h = static_cast<float>(rand()) / RAND_MAX; // 随机色相
     float s = 0.8f; // 固定饱和度，接近鲜艳的颜色
     float v = 0.8f; // 固定亮度
 
     // convert HSV to RGB
-    rdColor = HSVtoRGB(h, s, v);
+    return HSVtoRGB(h, s, v);
+}
+
+Cluster::Cluster(float Error, const Mesh& ref, const std::vector<unsigned int>& triIndices) : Error(Error), Mesh(ref, triIndices) {
+    rdColor = genRdColor();
 }
 
 void Cluster::draw(const ShaderProgram& shader) const {
@@ -214,8 +214,6 @@ BuildAdjacencyList(const std::vector<unsigned int>& m_indexData)
     return adjacency_list;
 }
 
-#include <cassert> // 需要引入 assert
-
 void clusterGrouping(const Mesh& mesh_ref, std::vector<ClusterGroup*>& cluster_groups) {
     const auto& clusters = mesh_ref.m_clusterList; // 获取 clusters 引用
     idx_t num_clusters = clusters.size();         // cluster 的数量
@@ -238,19 +236,13 @@ void clusterGrouping(const Mesh& mesh_ref, std::vector<ClusterGroup*>& cluster_g
     // 构建邻接矩阵
     for (size_t i = 0; i < clusters.size(); ++i) {
         Cluster* current_cluster = static_cast<Cluster*>(clusters[i]);
-        assert(current_cluster != nullptr); // 确保当前 cluster 不为 nullptr
-
         xadj[i + 1] = xadj[i] + current_cluster->adjacent_clusters.size();
 
         for (Cluster* neighbor_cluster : current_cluster->adjacent_clusters) {
-            assert(neighbor_cluster != nullptr); // 确保邻接 cluster 不为 nullptr
-
             // 获取邻接 cluster 的索引
             auto it = std::find(clusters.begin(), clusters.end(), neighbor_cluster);
-            assert(it != clusters.end()); // 确保邻接 cluster 存在于 clusters 列表中
 
             idx_t neighbor_idx = std::distance(clusters.begin(), it);
-            assert(neighbor_idx >= 0 && neighbor_idx < num_clusters); // 确保索引有效
             adjncy.push_back(neighbor_idx);
             adjwgt.push_back(1); // 假设所有边权重为 1
         }
@@ -279,9 +271,34 @@ void clusterGrouping(const Mesh& mesh_ref, std::vector<ClusterGroup*>& cluster_g
     } else {
         std::cerr << "METIS failed with error code: " << result << std::endl;
     }
+
+    // create ClusterGroup, set the error to the largest error in the clusters
+    cluster_groups.clear();
+    cluster_groups.reserve(num_groups);
+    for (idx_t i = 0; i < num_groups; ++i) {
+        ClusterGroup* cluster_group = new ClusterGroup();
+        cluster_group->Error = 0.0f;
+        cluster_groups.push_back(cluster_group);
+    }
+
+    // 将 cluster 分配到 cluster group
+    for (size_t i = 0; i < num_clusters; ++i) {
+        Cluster* current_cluster = static_cast<Cluster*>(clusters[i]);
+        idx_t group_id = partition_result[i];
+        ClusterGroup* current_group = cluster_groups[group_id];
+        // 将 cluster 加入到 group 中
+        current_group->clusters.push_back(current_cluster);
+        // 更新 group 的 Error
+        current_group->Error = std::max(current_group->Error, current_cluster->Error);
+    }
+
+    // // [DEBUG]: generate a random color for each clustergroup and assign to each cluster
+    // for (ClusterGroup* group : cluster_groups) {
+    //     glm::vec3 rdColor = genRdColor();
+    //     for (Cluster* cluster : group->clusters) {
+    //         cluster->rdColor = rdColor;
+    //     }
+    // }
 }
-
-
-
 
 

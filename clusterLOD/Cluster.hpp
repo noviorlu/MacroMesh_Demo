@@ -29,7 +29,7 @@ public:
 	void draw(const ShaderProgram& shader) const override;
 };
 
-class ClusterGroup : public Mesh {
+class ClusterGroup {
 public:
     float Error;
     
