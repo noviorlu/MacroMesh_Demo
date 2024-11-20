@@ -97,10 +97,31 @@ Mesh::Mesh(const Mesh& mesh, const std::vector<unsigned int>& triList) {
     }
 }
 
+Mesh::Mesh(const std::vector<Mesh>& mergeMeshes) {
+    std::unordered_map<glm::vec3, unsigned int> vertexMap;
+
+    for (const Mesh& mesh : mergeMeshes) {
+        for (size_t i = 0; i < mesh.m_vertexPositionData.size(); ++i) {
+            const glm::vec3& pos = mesh.m_vertexPositionData[i];
+
+            if (vertexMap.find(pos) == vertexMap.end()) {
+                vertexMap[pos] = m_vertexPositionData.size();
+                m_vertexPositionData.push_back(pos);
+                m_vertexNormalData.push_back(mesh.m_vertexNormalData[i]);
+                m_vertexUVData.push_back(mesh.m_vertexUVData[i]);
+            }
+        }
+
+        for (unsigned int index : mesh.m_indexData) {
+            m_indexData.push_back(vertexMap[mesh.m_vertexPositionData[index]]);
+        }
+    }
+}
+
 void Mesh::uploadToGPU() {
     if(m_clusterList.size() > 0) {
-        for(Cluster& cluster : m_clusterList) {
-            cluster.uploadToGPU();
+        for(Mesh* cluster : m_clusterList) {
+            cluster->uploadToGPU();
         }
         return;
     }
@@ -156,8 +177,8 @@ void Mesh::removeFromGPU() {
 
 void Mesh::draw(const ShaderProgram& shader) const {
     if(m_clusterList.size() > 0) {
-        for (const Cluster& cluster : m_clusterList) {
-            cluster.draw(shader);
+        for (Mesh* cluster : m_clusterList) {
+            cluster->draw(shader);
         }
         return;
     }

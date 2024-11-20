@@ -42,6 +42,8 @@ public:
 
 	Mesh(const Mesh& other, const std::vector<unsigned int>& triangleIndices);
 
+	Mesh(const std::vector<Mesh>& mergeMeshes);
+
 	~Mesh();
 
 	void uploadToGPU();
@@ -58,7 +60,8 @@ public:
 
 	std::vector<unsigned int> m_indexData;
 
-	std::vector<Cluster> m_clusterList;
+	std::vector<Mesh*> m_clusterList;
+
 
 	GLuint m_vbo;
 	GLuint m_vao;

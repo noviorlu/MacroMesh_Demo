@@ -66,7 +66,7 @@ if os.get() == "macosx" then
     linkOptionList = { "-framework IOKit", "-framework Cocoa", "-framework CoreVideo", "-framework OpenGL" }
 end
 
-buildOptions = {"-std=c++14"}
+buildOptions = {"-std=c++17"}
 
 solution "CS488-Projects"
     configurations { "Debug", "Release" }
@@ -74,6 +74,7 @@ solution "CS488-Projects"
     project "cluster"
         kind "ConsoleApp"
         language "C++"
+        cppdialect "C++17"
         location "build"
         objdir "build"
         targetdir "."

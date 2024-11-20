@@ -76,6 +76,9 @@ void clusterLOD::init()
 
 	MeshSplitter(*m_meshConsolidator);
 
+	std::vector<ClusterGroup*> cluster_groups;
+	clusterGrouping(*m_meshConsolidator, cluster_groups);
+
 	// Acquire the MeshInfoMap from the Mesh.
 	m_meshConsolidator->uploadToGPU();
 

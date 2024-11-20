@@ -1,7 +1,7 @@
 #include "Cluster.hpp"
 #include <iostream>
-#include <metis.h>
 #include <unordered_map>
+#include <unordered_set>
 #include <set>
 #include <algorithm>
 
@@ -44,8 +44,7 @@ void Cluster::draw(const ShaderProgram& shader) const {
     CHECK_GL_ERRORS;
     Mesh::draw(shader);
 }
-
-
+  
 void MeshSplitter(Mesh& mesh) {
     // 创建邻接列表
     auto adjacency_list = BuildAdjacencyList(mesh.m_indexData);
@@ -98,16 +97,46 @@ void MeshSplitter(Mesh& mesh) {
         std::cerr << "Partitioning failed with error code: " << result << std::endl;
     }
 
-    // group partitioning
+    // group partitioning REGION
     std::unordered_map<idx_t, std::vector<unsigned int>> partition_map;
     for (size_t i = 0; i < num_elements; ++i) {
         partition_map[partition_result[i]].push_back(i);
     }
 
-    for(auto& entry : partition_map) {
-        mesh.m_clusterList.push_back(Cluster(0, mesh, entry.second));
-    }
+    { /// Cluster Creation REGION
+        // Step 1: 构建 Cluster Adjacency 和 ID 映射
+        std::unordered_map<idx_t, std::unordered_set<idx_t>> cluster_adjacency;
+        for (size_t tri = 0; tri < partition_result.size(); ++tri) {
+            idx_t current_cluster = partition_result[tri];
 
+            for (size_t neighbor : adjacency_list[tri]) {
+                idx_t neighbor_cluster = partition_result[neighbor];
+                if (current_cluster != neighbor_cluster) {
+                    cluster_adjacency[current_cluster].insert(neighbor_cluster);
+                }
+            }
+        }
+
+        // Step 2: 创建 Clusters 并存入 mesh.m_clusterList
+        std::unordered_map<idx_t, Cluster*> cluster_map;
+        for (const auto& [cluster_id, triangles] : partition_map) {
+            auto* cluster = new Cluster(0, mesh, triangles);
+            cluster->adjacent_clusters.reserve(cluster_adjacency[cluster_id].size());
+            mesh.m_clusterList.push_back(cluster);
+            cluster_map[cluster_id] = cluster;
+        }
+
+        // Step 3: 构建邻接关系
+        for (const auto& [cluster_id, neighbors] : cluster_adjacency) {
+            Cluster* current_cluster = cluster_map[cluster_id];
+
+            for (idx_t neighbor_id : neighbors) {
+                current_cluster->adjacent_clusters.push_back(cluster_map[neighbor_id]);
+            }
+        }
+    } /// Cluster Creation REGION End
+
+    // 清空 mesh 原始数据
     mesh.m_vertexNormalData.clear();
     mesh.m_vertexPositionData.clear();
     mesh.m_vertexUVData.clear();
@@ -185,8 +214,74 @@ BuildAdjacencyList(const std::vector<unsigned int>& m_indexData)
     return adjacency_list;
 }
 
-void ClusterPartition(Mesh& mesh){
-    
+#include <cassert> // 需要引入 assert
+
+void clusterGrouping(const Mesh& mesh_ref, std::vector<ClusterGroup*>& cluster_groups) {
+    const auto& clusters = mesh_ref.m_clusterList; // 获取 clusters 引用
+    idx_t num_clusters = clusters.size();         // cluster 的数量
+
+    if (num_clusters == 0) {
+        std::cerr << "No clusters to group!" << std::endl;
+        return;
+    }
+
+    // 构建 METIS 的邻接矩阵
+    std::vector<idx_t> xadj(num_clusters + 1, 0);  // 邻接起始索引
+    std::vector<idx_t> adjncy;                     // 邻接节点
+    std::vector<idx_t> adjwgt;                     // 边权重（这里用 1）
+    // 定义其他 METIS 参数
+    idx_t num_constraints = 1;
+    idx_t num_groups = static_cast<idx_t>(std::ceil(static_cast<float>(num_clusters) / MAXN_CLUSTER_IN_CLUSTERGROUP));
+    std::vector<idx_t> partition_result(num_clusters, 0);
+    idx_t objval;
+
+    // 构建邻接矩阵
+    for (size_t i = 0; i < clusters.size(); ++i) {
+        Cluster* current_cluster = static_cast<Cluster*>(clusters[i]);
+        assert(current_cluster != nullptr); // 确保当前 cluster 不为 nullptr
+
+        xadj[i + 1] = xadj[i] + current_cluster->adjacent_clusters.size();
+
+        for (Cluster* neighbor_cluster : current_cluster->adjacent_clusters) {
+            assert(neighbor_cluster != nullptr); // 确保邻接 cluster 不为 nullptr
+
+            // 获取邻接 cluster 的索引
+            auto it = std::find(clusters.begin(), clusters.end(), neighbor_cluster);
+            assert(it != clusters.end()); // 确保邻接 cluster 存在于 clusters 列表中
+
+            idx_t neighbor_idx = std::distance(clusters.begin(), it);
+            assert(neighbor_idx >= 0 && neighbor_idx < num_clusters); // 确保索引有效
+            adjncy.push_back(neighbor_idx);
+            adjwgt.push_back(1); // 假设所有边权重为 1
+        }
+    }
+
+    // 调用 METIS_PartGraphKway
+    int result = METIS_PartGraphKway(
+        &num_clusters,         // 节点数量
+        &num_constraints,      // 约束数量
+        xadj.data(),           // 邻接起始索引
+        adjncy.data(),         // 邻接节点
+        nullptr,               // 顶点权重（可为 NULL）
+        nullptr,               // 节点大小（可为 NULL）
+        adjwgt.data(),         // 边权重
+        &num_groups,           // 分区数量
+        nullptr,               // 每个分区的目标权重（可为 NULL）
+        nullptr,               // 不平衡向量（可为 NULL）
+        nullptr,               // 选项（可为 NULL）
+        &objval,               // 输出目标值
+        partition_result.data() // 分区结果
+    );
+
+    // 检查 METIS 调用结果
+    if (result == METIS_OK) {
+        std::cout << "Partitioning succeeded. Objective value: " << objval << std::endl;
+    } else {
+        std::cerr << "METIS failed with error code: " << result << std::endl;
+    }
 }
+
+
+
 
 
