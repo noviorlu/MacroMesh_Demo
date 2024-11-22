@@ -53,13 +53,20 @@ if os.get() == "windows" then
         "Imm32",
         "lua",
         "metis",
-        "gklib"
+        "gklib",
+        "mingwex", -- 必须在末尾
+        "msvcrt"   -- 必须在末尾
     }
+    linkoptions { "-lmingwex", "-lmsvcrt" }
     table.insert(includeDirList, "C:/projects/vcpkg/installed/x64-windows/include")
     table.insert(includeDirList, "C:/projects/vcpkg/installed/x86-mingw-static/include")
     table.insert(libDirectories, "C:/projects/vcpkg/installed/x64-windows/lib")
     table.insert(libDirectories, "C:/projects/vcpkg/installed/x86-mingw-static/lib")
+    -- 指定 GCC 编译器
+    buildoptions { "-std=c++17" }
+    toolset "gcc" -- 明确指定使用 GCC 工具链
 end
+
 
 -- Build Options:
 if os.get() == "macosx" then
