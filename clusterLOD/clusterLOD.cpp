@@ -10,6 +10,7 @@ using namespace std;
 #include "JointNode.hpp"
 
 #include "Cluster.hpp"
+#include "HalfEdgeMesh.hpp"
 
 #include <imgui/imgui.h>
 
@@ -74,10 +75,14 @@ void clusterLOD::init()
         }
     );
 
-	MeshSplitter(*m_meshConsolidator);
+	HalfEdgeMesh* halfEdgeMesh = new HalfEdgeMesh(*m_meshConsolidator);
+	// halfEdgeMesh->computeInitialQuadrics();
+	halfEdgeMesh->partition_loop();
+	halfEdgeMesh->exportMesh(*m_meshConsolidator);
 
-	std::vector<ClusterGroup*> cluster_groups;
-	clusterGrouping(*m_meshConsolidator, cluster_groups);
+	// MeshSplitter(*m_meshConsolidator);
+	// std::vector<ClusterGroup*> cluster_groups;
+	// clusterGrouping(*m_meshConsolidator, cluster_groups);
 
 	// Acquire the MeshInfoMap from the Mesh.
 	m_meshConsolidator->uploadToGPU();

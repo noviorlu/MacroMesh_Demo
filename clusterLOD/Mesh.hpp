@@ -54,9 +54,7 @@ public:
 
 	static MeshInfoMap s_meshInfoMap;
 
-	std::vector<glm::vec3> m_vertexPositionData;
-	std::vector<glm::vec3> m_vertexNormalData;
-	std::vector<glm::vec2> m_vertexUVData;
+	std::vector<Vertex> m_vertexData;
 
 	std::vector<unsigned int> m_indexData;
 
@@ -66,7 +64,5 @@ public:
 	GLuint m_vbo;
 	GLuint m_vao;
 	GLuint m_ibo;
-
-	friend std::ostream& operator<<(std::ostream& os, const Mesh& mesh);
 };
 

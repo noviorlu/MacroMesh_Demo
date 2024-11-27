@@ -54,8 +54,24 @@ Mesh::Mesh(
 	const ObjFilePath & objFile = *objFileList.begin();
 
 #if ENABLE_IBO == true
-	ObjFileDecoder::decode(objFile.c_str(), meshId, m_vertexPositionData, m_vertexNormalData, m_vertexUVData, m_indexData);
-	batchInfo.numIndices = m_indexData.size();
+	std::vector<glm::vec3> m_vertexPositionData;
+	std::vector<glm::vec3> m_vertexNormalData;
+	std::vector<glm::vec2> m_vertexUVData;
+    
+    ObjFileDecoder::decode(objFile.c_str(), meshId, m_vertexPositionData, m_vertexNormalData, m_vertexUVData, m_indexData);
+	
+    m_vertexData.reserve(m_vertexPositionData.size());
+
+    for (unsigned int i = 0; i < m_vertexPositionData.size(); i++) {
+        Vertex vertex = {
+            m_vertexPositionData[i],
+            m_vertexNormalData[i],
+            m_vertexUVData[i]
+        };
+        m_vertexData.push_back(vertex);
+    }
+    
+    batchInfo.numIndices = m_indexData.size();
 #else
 	ObjFileDecoder::decode(objFile.c_str(), meshId, m_vertexPositionData, m_vertexNormalData, m_vertexUVData);
 	batchInfo.numIndices = m_vertexPositionData.size();
@@ -65,57 +81,47 @@ Mesh::Mesh(
 	s_meshInfoMap[meshId] = this;
 }
 
-namespace std {
-    template<>
-    struct hash<glm::vec3> {
-        std::size_t operator()(const glm::vec3& v) const noexcept {
-            // 简单组合哈希函数
-            std::hash<float> floatHasher;
-            size_t h1 = floatHasher(v.x);
-            size_t h2 = floatHasher(v.y);
-            size_t h3 = floatHasher(v.z);
-            return h1 ^ (h2 << 1) ^ (h3 << 2); // 合并哈希值
-        }
-    };
-}
-
 Mesh::Mesh(const Mesh& mesh, const std::vector<unsigned int>& triList) {
-    std::unordered_map<unsigned int, unsigned int> vertexMap;
-    for (unsigned int tri : triList) {
-        for (int i = 0; i < 3; ++i) {
-            unsigned int oldIndex = mesh.m_indexData[3 * tri + i]; // 获取旧的顶点索引
-
-            if (vertexMap.find(oldIndex) == vertexMap.end()) {
-                vertexMap[oldIndex] = m_vertexPositionData.size(); // 映射到新索引
-                m_vertexPositionData.push_back(mesh.m_vertexPositionData[oldIndex]);
-                m_vertexNormalData.push_back(mesh.m_vertexNormalData[oldIndex]);
-                m_vertexUVData.push_back(mesh.m_vertexUVData[oldIndex]);
-            }
-
-            m_indexData.push_back(vertexMap[oldIndex]);
+    std::unordered_map<Vertex, unsigned int, VertexHash> vertexMap;
+    for (unsigned int index : triList) {
+        if (index >= mesh.m_vertexData.size()) {
+            throw std::out_of_range("Index in mesh.m_indexData is out of range of m_vertexData.");
         }
+        const Vertex& vertex = mesh.m_vertexData[index];
+
+        if (vertexMap.find(vertex) == vertexMap.end()) {
+            vertexMap[vertex] = m_vertexData.size();
+            m_vertexData.push_back(vertex);
+        }
+
+        m_indexData.push_back(vertexMap[vertex]);
     }
+
+    m_vertexData.shrink_to_fit();
+    m_indexData.shrink_to_fit();
 }
 
 Mesh::Mesh(const std::vector<Mesh>& mergeMeshes) {
-    std::unordered_map<glm::vec3, unsigned int> vertexMap;
+    std::unordered_map<Vertex, unsigned int, VertexHash> vertexMap;
 
     for (const Mesh& mesh : mergeMeshes) {
-        for (size_t i = 0; i < mesh.m_vertexPositionData.size(); ++i) {
-            const glm::vec3& pos = mesh.m_vertexPositionData[i];
-
-            if (vertexMap.find(pos) == vertexMap.end()) {
-                vertexMap[pos] = m_vertexPositionData.size();
-                m_vertexPositionData.push_back(pos);
-                m_vertexNormalData.push_back(mesh.m_vertexNormalData[i]);
-                m_vertexUVData.push_back(mesh.m_vertexUVData[i]);
+        for (const Vertex& vertex : mesh.m_vertexData) {
+            if (vertexMap.find(vertex) == vertexMap.end()) {
+                vertexMap[vertex] = m_vertexData.size();
+                m_vertexData.push_back(vertex);
             }
         }
 
         for (unsigned int index : mesh.m_indexData) {
-            m_indexData.push_back(vertexMap[mesh.m_vertexPositionData[index]]);
+            if (index >= mesh.m_vertexData.size()) {
+                throw std::out_of_range("Index in mesh.m_indexData is out of range of m_vertexData.");
+            }
+            m_indexData.push_back(vertexMap[mesh.m_vertexData[index]]);
         }
     }
+
+    m_vertexData.shrink_to_fit();
+    m_indexData.shrink_to_fit();
 }
 
 void Mesh::uploadToGPU() {
@@ -126,24 +132,14 @@ void Mesh::uploadToGPU() {
         return;
     }
 
-    std::vector<Vertex> vertexData;
-    vertexData.reserve(m_vertexPositionData.size());
-
-    for (unsigned int i = 0; i < m_vertexPositionData.size(); i++) {
-        Vertex vertex = {
-            m_vertexPositionData[i],
-            m_vertexNormalData[i],
-            m_vertexUVData[i]
-        };
-        vertexData.push_back(vertex);
-    }
+    
 
     glGenVertexArrays(1, &m_vao);
     glBindVertexArray(m_vao);
 
     glGenBuffers(1, &m_vbo);
     glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
-    glBufferData(GL_ARRAY_BUFFER, vertexData.size() * sizeof(Vertex), vertexData.data(), GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, m_vertexData.size() * sizeof(Vertex), m_vertexData.data(), GL_STATIC_DRAW);
 
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
@@ -194,43 +190,3 @@ void Mesh::draw(const ShaderProgram& shader) const {
     glBindVertexArray(0);
 }
 
-std::ostream& operator<<(std::ostream& os, const Mesh& mesh) {
-    os << "Mesh Info:" << std::endl;
-    os << "  Vertices: " << mesh.m_vertexPositionData.size() << std::endl;
-    os << "  Triangles: " << mesh.m_indexData.size() / 3 << std::endl;
-
-    // 输出顶点数据
-    os << "  Vertex Data:" << std::endl;
-    for (size_t i = 0; i < mesh.m_vertexPositionData.size(); ++i) {
-        os << "    Vertex " << i << ": "
-           << "Position(" << mesh.m_vertexPositionData[i].x << ", "
-           << mesh.m_vertexPositionData[i].y << ", "
-           << mesh.m_vertexPositionData[i].z << "), "
-           << "Normal(" << mesh.m_vertexNormalData[i].x << ", "
-           << mesh.m_vertexNormalData[i].y << ", "
-           << mesh.m_vertexNormalData[i].z << "), ";
-        if (i < mesh.m_vertexUVData.size()) {
-            os << "UV(" << mesh.m_vertexUVData[i].x << ", " << mesh.m_vertexUVData[i].y << ")";
-        } else {
-            os << "UV(None)";
-        }
-        os << std::endl;
-    }
-
-    // 输出索引数据
-    os << "  Index Data (Triangles):" << std::endl;
-    for (size_t i = 0; i < mesh.m_indexData.size(); i += 3) {
-        os << "    Triangle " << i / 3 << ": ["
-           << mesh.m_indexData[i] << ", "
-           << mesh.m_indexData[i + 1] << ", "
-           << mesh.m_indexData[i + 2] << "]" << std::endl;
-    }
-
-    // 输出 Cluster 信息
-    os << "  Clusters: " << mesh.m_clusterList.size() << std::endl;
-    for (size_t i = 0; i < mesh.m_clusterList.size(); ++i) {
-        os << "    Cluster " << i << ": (Details depend on Cluster implementation)" << std::endl;
-    }
-
-    return os;
-}

@@ -1,3 +1,13 @@
+workspace "CS488_Framework"
+    configurations { "Debug", "Release" }
+    platforms { "x86", "x64" }
+    location "vsproject"
+
+    filter "platforms:x86"
+        architecture "x86"
+    filter "platforms:x64"
+        architecture "x64"
+
 includeDirList = includeDirList or { 
     "shared",
     "shared/gl3w",
