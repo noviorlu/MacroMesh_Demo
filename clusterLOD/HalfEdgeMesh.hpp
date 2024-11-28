@@ -82,8 +82,6 @@ private:
         size_t endIdx,
         bool isParentClusterGroup
     );
-    void BuildClusterAdjacency(std::unordered_map<int, std::unordered_set<int>>& cluster_adjacency);
-    void GroupClustersWithMETIS();
     
     std::unordered_map<int, int> clusterToGroupMap;
 };
