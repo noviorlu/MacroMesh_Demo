@@ -15,30 +15,23 @@ void HalfEdgeMesh::BuildAdjacencyListForRange(
     size_t startIdx,
     size_t endIdx) 
 {
-    // Adjust the size of the adjacency list to match the range
     size_t rangeSize = endIdx - startIdx;
     adjacency_list.resize(rangeSize);
 
-    // Iterate over the specified range of faces
     for (size_t i = startIdx; i < endIdx; ++i) {
-        const Face& face = faces[i];
-        const HalfEdge* edge = face.edge;
+        const HalfEdge* edge = m_faces[i].edge;
 
         do {
-            if (edge->twin && edge->twin->face) {
-                // Compute the index of the twin's face
-                ptrdiff_t twinFaceIndex = edge->twin->face - faces.data();
-                
-                // Only consider neighbors within the specified range
-                if (twinFaceIndex >= static_cast<ptrdiff_t>(startIdx) &&
-                    twinFaceIndex < static_cast<ptrdiff_t>(endIdx)) 
-                {
-                    size_t localIndex = twinFaceIndex - startIdx;
-                    adjacency_list[i - startIdx].push_back(localIndex);
+            const HalfEdge* twin = edge->twin;
+            if (twin && twin->face) {
+                size_t twinFaceIndex = static_cast<size_t>(twin->face - &m_faces[0]);
+
+                if (twinFaceIndex >= startIdx && twinFaceIndex < endIdx) {
+                    adjacency_list[i - startIdx].push_back(twinFaceIndex - startIdx);
                 }
             }
             edge = edge->next;
-        } while (edge != face.edge);
+        } while (edge != m_faces[i].edge);
     }
 }
 
@@ -92,17 +85,17 @@ void HalfEdgeMesh::HalfEdgeMeshSplitterRecursive(
         return;
     }
 
-    // Use std::partition to group faces by partitionResult
+    // Use std::partition to group m_faces by partitionResult
     auto partitionPoint = std::partition(
-        faces.begin() + startIdx, faces.begin() + endIdx,
+        m_faces.begin() + startIdx, m_faces.begin() + endIdx,
         [&](const Face& face) {
-            size_t idx = &face - &faces[0];
+            size_t idx = &face - &m_faces[0];
             return partitionResult[idx - startIdx] == 0;
         }
     );
 
     // Calculate split indices
-    size_t midIdx = std::distance(faces.begin(), partitionPoint);
+    size_t midIdx = std::distance(m_faces.begin(), partitionPoint);
 
     HalfEdgeMeshSplitterRecursive(startIdx, midIdx, isParentClusterGroup);
     HalfEdgeMeshSplitterRecursive(midIdx, endIdx, isParentClusterGroup);
@@ -113,7 +106,7 @@ void HalfEdgeMesh::HalfEdgeMeshSplitter() {
     m_clusterOffsets.clear();
     m_clusterGroupOffsets.clear();
 
-    HalfEdgeMeshSplitterRecursive(0, faces.size());
+    HalfEdgeMeshSplitterRecursive(0, m_faces.size());
 
     // print the splitted cluster and cluster group
     std::cout << "Cluster Offsets: ";

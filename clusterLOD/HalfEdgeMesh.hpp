@@ -19,11 +19,10 @@ struct HalfVertex : public Vertex {
     glm::mat4 quadric;
 
     HalfVertex(const glm::vec3& position, const glm::vec3& normal, const glm::vec2& uv) 
-        : Vertex(position, normal, uv) 
-    {
-        edge = nullptr;
-        quadric = glm::mat4(0.0f);
-    }
+        : Vertex(position, normal, uv), edge(nullptr), quadric(0.0f) {}
+
+    HalfVertex(const Vertex& vertex)
+        : Vertex(vertex), edge(nullptr), quadric(0.0f) {}
 };
 
 struct HalfEdge {
@@ -47,9 +46,9 @@ public:
     // void exportMesh(std::vector<Cluster>& clusterList, std::vector<ClusterGroup>& clusterGroupList);
 
 private:
-    std::vector<HalfVertex*> vertices;
-    std::vector<HalfEdge*> edges;
-    std::vector<Face> faces;
+    std::vector<HalfVertex> m_vertices;
+    std::vector<HalfEdge*> m_edges;
+    std::vector<Face> m_faces;
 
     std::vector<size_t> m_clusterOffsets;
     std::vector<size_t> m_clusterGroupOffsets;
