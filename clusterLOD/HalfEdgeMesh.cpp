@@ -92,31 +92,69 @@ void HalfEdgeMesh::exportMesh(Mesh& mesh) {
         );
     }
 
+    int i = 0;
     for (const auto& face : m_faces) {
+        // only export the first range faces
+        if(i >= m_clusterOffsets[1]) {
+            break;
+        }
+
         HalfEdge* edge = face.edge;
         do {
             size_t index = static_cast<size_t>(edge->origin - &m_vertices[0]);
             mesh.m_indexData.push_back(static_cast<unsigned int>(index));
             edge = edge->next;
         } while (edge != face.edge);
+
+        i++;
     }
 }
 
-// void HalfEdgeMesh::exportMesh(std::vector<Cluster>& clusterList, std::vector<ClusterGroup>& clusterGroupList) {
+void HalfEdgeMesh::exportMesh(std::vector<Cluster>& clusterList, std::vector<ClusterGroup>& clusterGroupList) {
+    clusterList.clear();
+    clusterGroupList.clear();
 
-//     std::unordered_map<const HalfVertex*, size_t> vertex_to_index;
-//     for (size_t i = 0; i < m_vertices.size(); ++i) {
-//         vertex_to_index[m_vertices[i]] = i;
-//         Vertex v(m_vertices[i]->position, m_vertices[i]->normal, m_vertices[i]->uv);
-//         mesh.m_vertexData.push_back(v);
-//     }
+    for (size_t i = 0; i < m_clusterOffsets.size() - 1; ++i) {
+        size_t startIdx = m_clusterOffsets[i];
+        size_t endIdx = m_clusterOffsets[i + 1];
 
-//     for (auto& face : m_faces) {
-//         HalfEdge* edge = face.edge;
-//         do {
-//             size_t index = vertex_to_index[edge->origin];
-//             mesh.m_indexData.push_back(static_cast<unsigned int>(index));
-//             edge = edge->next;
-//         } while (edge != face.edge);
-//     }
-// }
+        Cluster cluster(0.0f);
+        cluster.m_vertexData.clear();
+        cluster.m_indexData.clear();
+
+        for (size_t j = startIdx; j < endIdx; ++j) {
+            const auto& halfVertex = m_vertices[j];
+            cluster.m_vertexData.emplace_back(
+                halfVertex.position,
+                halfVertex.normal,
+                halfVertex.uv
+            );
+        }
+
+        for (size_t j = startIdx; j < endIdx; ++j) {
+            const auto& face = m_faces[j];
+            HalfEdge* edge = face.edge;
+            do {
+                size_t index = static_cast<size_t>(edge->origin - &m_vertices[0]) - startIdx;
+                cluster.m_indexData.push_back(static_cast<unsigned int>(index));
+                edge = edge->next;
+            } while (edge != face.edge);
+        }
+
+        clusterList.push_back(std::move(cluster));
+    }
+
+    for (size_t i = 0; i < m_clusterGroupOffsets.size() - 1; ++i) {
+        size_t startIdx = m_clusterGroupOffsets[i];
+        size_t endIdx = m_clusterGroupOffsets[i + 1];
+
+        ClusterGroup group;
+        group.Error = 0.0f;
+
+        for (size_t j = startIdx; j < endIdx; ++j) {
+            group.clusters.push_back(&clusterList[j]);
+        }
+
+        clusterGroupList.push_back(std::move(group));
+    }
+}

@@ -134,8 +134,8 @@ Mesh::Mesh(const std::vector<Mesh>& mergeMeshes) {
 
 void Mesh::uploadToGPU() {
     if(m_clusterList.size() > 0) {
-        for(Mesh* cluster : m_clusterList) {
-            cluster->uploadToGPU();
+        for(auto& cluster : m_clusterList) {
+            cluster.uploadToGPU();
         }
         return;
     }
@@ -181,8 +181,8 @@ void Mesh::removeFromGPU() {
 
 void Mesh::draw(const ShaderProgram& shader) const {
     if(m_clusterList.size() > 0) {
-        for (Mesh* cluster : m_clusterList) {
-            cluster->draw(shader);
+        for (auto& cluster : m_clusterList) {
+            cluster.draw(shader);
         }
         return;
     }

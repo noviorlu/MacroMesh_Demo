@@ -78,6 +78,7 @@ void clusterLOD::init()
 	HalfEdgeMesh* halfEdgeMesh = new HalfEdgeMesh(*m_meshConsolidator);
 	halfEdgeMesh->partition_loop();
 	halfEdgeMesh->exportMesh(*m_meshConsolidator);
+	// halfEdgeMesh->exportMesh(m_meshConsolidator->m_clusterList, m_meshConsolidator->m_clusterGroupList);
 
 	// MeshSplitter(*m_meshConsolidator);
 	// std::vector<ClusterGroup*> cluster_groups;

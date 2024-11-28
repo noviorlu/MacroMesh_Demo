@@ -30,6 +30,7 @@ class Mesh;
 typedef std::unordered_map<MeshId, Mesh*>  MeshInfoMap;
 
 class Cluster;
+class ClusterGroup;
 
 /*
 * Class for consolidating all vertex data within a list of .obj files.
@@ -58,8 +59,8 @@ public:
 
 	std::vector<unsigned int> m_indexData;
 
-	std::vector<Mesh*> m_clusterList;
-
+	std::vector<Cluster> m_clusterList;
+	std::vector<ClusterGroup> m_clusterGroupList;
 
 	GLuint m_vbo;
 	GLuint m_vao;
@@ -67,22 +68,19 @@ public:
 };
 
 
-// class Cluster : public Mesh {
-// public:
-//     float Error;
-    
-//     glm::vec3 rdColor;
+class Cluster : public Mesh {
+public:
+    float Error;
+    glm::vec3 rdColor;
 
-//     Cluster(float Error);
+    Cluster(float Error);
+    ~Cluster() {}
 
-//     ~Cluster() {}
+	void draw(const ShaderProgram& shader) const override;
+};
 
-// 	void draw(const ShaderProgram& shader) const override;
-// };
-
-// class ClusterGroup {
-// public:
-//     float Error;
-    
-//     std::vector<Cluster*> clusters;
-// };
+class ClusterGroup {
+public:
+    float Error;
+    std::vector<Cluster*> clusters;
+};
