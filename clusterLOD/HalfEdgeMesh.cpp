@@ -2,17 +2,16 @@
 
 #include <unordered_map>
 #include <utility>
+#include <iostream>
+#include <algorithm>
 
-struct pair_hash {
-    template <class T1, class T2>
-    std::size_t operator()(const std::pair<T1, T2>& pair) const {
-        auto hash1 = std::hash<T1>{}(pair.first);
-        auto hash2 = std::hash<T2>{}(pair.second);
-        return hash1 ^ (hash2 << 1);
-    }
-};
+#define HALF_EDGE_MESH_SANITY_CHECK
 
 HalfEdgeMesh::HalfEdgeMesh(const Mesh& mesh) {
+    faces.reserve(mesh.m_indexData.size() / 3);
+    vertices.reserve(mesh.m_vertexData.size());
+    edges.reserve(mesh.m_indexData.size());
+    
     for (size_t i = 0; i < mesh.m_vertexData.size(); ++i) {
         const Vertex& vertexData = mesh.m_vertexData[i];
         HalfVertex* vertex = new HalfVertex(vertexData.position, vertexData.normal, vertexData.uv);
@@ -42,12 +41,11 @@ HalfEdgeMesh::HalfEdgeMesh(const Mesh& mesh) {
         edge1->prev = edge0;
         edge2->prev = edge1;
 
-        Face *face = new Face(faces.size(), edge0);
-        faces.push_back(face);
+        faces.push_back(Face(edge0));
 
-        edge0->face = faces.back();
-        edge1->face = faces.back();
-        edge2->face = faces.back();
+        edge0->face = &faces.back();
+        edge1->face = &faces.back();
+        edge2->face = &faces.back();
 
         edges.push_back(edge0);
         edges.push_back(edge1);
@@ -74,6 +72,50 @@ HalfEdgeMesh::HalfEdgeMesh(const Mesh& mesh) {
             edge->origin->edge = edge;
         }
     }
+
+#ifdef HALF_EDGE_MESH_SANITY_CHECK
+    for (size_t i = 0; i < edges.size(); ++i) {
+        const HalfEdge* edge = edges[i];
+
+        // 检查 edge 的 face 是否为空
+        if (!edge->face) {
+            std::cerr << "Edge " << i << " has no face!" << std::endl;
+        }
+
+        // 检查 twin 的一致性
+        if (!edge->twin) {
+            std::cerr << "Edge " << i << " has no twin!" << std::endl;
+        } else {
+            // 检查双向一致性
+            if (edge->twin->twin != edge) {
+                std::cerr << "Edge " << i 
+                        << " twin relationship is inconsistent! "
+                        << "twin->twin != edge." << std::endl;
+            }
+            // 检查 twin 的 face 是否为空
+            if (!edge->twin->face) {
+                std::cerr << "Edge " << i 
+                        << " has a twin with no face!" << std::endl;
+            }
+            // 检查方向是否匹配
+            if (edge->origin != edge->twin->next->origin) {
+                std::cerr << "Edge " << i 
+                        << " twin direction mismatch! "
+                        << "edge->origin != edge->twin->next->origin." << std::endl;
+            }
+        }
+    }
+
+    // 检查每个顶点是否与至少一条边连接
+    for (size_t i = 0; i < vertices.size(); ++i) {
+        const HalfVertex* vertex = vertices[i];
+        if (!vertex->edge) {
+            std::cerr << "Vertex " << i << " has no edge!" << std::endl;
+        }
+    }
+#endif
+
+    edges.shrink_to_fit();
 }
 
 HalfEdgeMesh::~HalfEdgeMesh() {
@@ -82,9 +124,6 @@ HalfEdgeMesh::~HalfEdgeMesh() {
     }
     for(auto vertex : vertices) {
         delete vertex;
-    }
-    for(auto face : faces) {
-        delete face;
     }
 }
 
@@ -100,13 +139,13 @@ void HalfEdgeMesh::exportMesh(Mesh& mesh) {
     }
 
     for (auto& face : faces) {
-        if(clusterToGroupMap[face->clusterIndex] != 0) continue;
-        HalfEdge* edge = face->edge;
+        // if(clusterToGroupMap[face.clusterIndex] != 0) continue;
+        HalfEdge* edge = face.edge;
         do {
             size_t index = vertex_to_index[edge->origin];
             mesh.m_indexData.push_back(static_cast<unsigned int>(index));
             edge = edge->next;
-        } while (edge != face->edge);
+        } while (edge != face.edge);
     }
 }
 

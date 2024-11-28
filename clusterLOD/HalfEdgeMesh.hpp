@@ -34,11 +34,10 @@ struct HalfEdge {
 };
 
 struct Face {
-    int index;
     int clusterIndex;
     HalfEdge* edge;
 
-    Face(int index, HalfEdge* edge) : index(index), edge(edge) {
+    Face(HalfEdge* edge) : edge(edge) {
         clusterIndex = -1;
     }
 };
@@ -51,7 +50,10 @@ public:
 private:
     std::vector<HalfVertex*> vertices;
     std::vector<HalfEdge*> edges;
-    std::vector<Face*> faces;
+    std::vector<Face> faces;
+
+    std::vector<unsigned int> m_clusterOffsets;
+    std::vector<unsigned int> m_clusterGroupOffsets;
 
 
     // void computeInitialQuadrics();

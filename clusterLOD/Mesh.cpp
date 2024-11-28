@@ -40,6 +40,7 @@ static void appendVector (
 	dest.insert(dest.end(), source.begin(), source.end());
 }
 
+#define MESH_SANITY_CHECK
 
 //----------------------------------------------------------------------------------------
 Mesh::Mesh(
@@ -54,23 +55,7 @@ Mesh::Mesh(
 	const ObjFilePath & objFile = *objFileList.begin();
 
 #if ENABLE_IBO == true
-	std::vector<glm::vec3> m_vertexPositionData;
-	std::vector<glm::vec3> m_vertexNormalData;
-	std::vector<glm::vec2> m_vertexUVData;
-    
-    ObjFileDecoder::decode(objFile.c_str(), meshId, m_vertexPositionData, m_vertexNormalData, m_vertexUVData, m_indexData);
-	
-    m_vertexData.reserve(m_vertexPositionData.size());
-
-    for (unsigned int i = 0; i < m_vertexPositionData.size(); i++) {
-        Vertex vertex = {
-            m_vertexPositionData[i],
-            m_vertexNormalData[i],
-            m_vertexUVData[i]
-        };
-        m_vertexData.push_back(vertex);
-    }
-    
+    ObjFileDecoder::decode(objFile.c_str(), meshId, m_vertexData, m_indexData);
     batchInfo.numIndices = m_indexData.size();
 #else
 	ObjFileDecoder::decode(objFile.c_str(), meshId, m_vertexPositionData, m_vertexNormalData, m_vertexUVData);
@@ -79,10 +64,31 @@ Mesh::Mesh(
 
 	batchInfo.startIndex = 0;
 	s_meshInfoMap[meshId] = this;
+
+#ifdef MESH_SANITY_CHECK
+    std::unordered_map<std::pair<int, int>, int, pair_hash> edgeCount;
+
+    for (size_t i = 0; i < m_indexData.size(); i += 3) {
+        int v0 = m_indexData[i];
+        int v1 = m_indexData[i + 1];
+        int v2 = m_indexData[i + 2];
+
+        edgeCount[{std::min(v0, v1), std::max(v0, v1)}]++;
+        edgeCount[{std::min(v1, v2), std::max(v1, v2)}]++;
+        edgeCount[{std::min(v2, v0), std::max(v2, v0)}]++;
+    }
+
+    for (const auto& [edge, count] : edgeCount) {
+        if (count != 2) {
+            std::cerr << "Edge (" << edge.first << " -> " << edge.second 
+                      << ") is used " << count << " times!" << std::endl;
+        }
+    }
+#endif
 }
 
 Mesh::Mesh(const Mesh& mesh, const std::vector<unsigned int>& triList) {
-    std::unordered_map<Vertex, unsigned int, VertexHash> vertexMap;
+    std::unordered_map<Vertex, unsigned int> vertexMap;
     for (unsigned int index : triList) {
         if (index >= mesh.m_vertexData.size()) {
             throw std::out_of_range("Index in mesh.m_indexData is out of range of m_vertexData.");
@@ -102,7 +108,7 @@ Mesh::Mesh(const Mesh& mesh, const std::vector<unsigned int>& triList) {
 }
 
 Mesh::Mesh(const std::vector<Mesh>& mergeMeshes) {
-    std::unordered_map<Vertex, unsigned int, VertexHash> vertexMap;
+    std::unordered_map<Vertex, unsigned int> vertexMap;
 
     for (const Mesh& mesh : mergeMeshes) {
         for (const Vertex& vertex : mesh.m_vertexData) {

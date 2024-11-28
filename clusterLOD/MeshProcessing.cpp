@@ -6,22 +6,35 @@
 
 
 #define MAX_TRI_IN_CLUSTER 256
-#define MAXN_CLUSTER_IN_CLUSTERGROUP 32
-
+#define MAX_CLUSTER_IN_CLUSTERGROUP 32
+#define MAX_TRI_IN_CLUSTERGROUP (MAX_TRI_IN_CLUSTER * MAX_CLUSTER_IN_CLUSTERGROUP)
 
 void HalfEdgeMesh::BuildAdjacencyListFromHalfEdgeMesh(std::vector<std::vector<size_t>>& adjacency_list) {
     adjacency_list.resize(this->faces.size());
-
     for (size_t i = 0; i < this->faces.size(); ++i) {
-        const Face& face = *(this->faces[i]);
+        const Face& face = this->faces[i];
         
         const HalfEdge* edge = face.edge;
         do {
-            if (edge->twin) {
-                size_t adjacent_face_index = edge->twin->face->index;
-                adjacency_list[i].push_back(adjacent_face_index);
+            if (edge->twin && edge->twin->face) {
+                ptrdiff_t index = edge->twin->face - this->faces.data();
+                if (index >= 0 && static_cast<size_t>(index) < this->faces.size()) {
+                    adjacency_list[i].push_back(static_cast<size_t>(index));
+                } else {
+                    std::cerr << "Invalid face pointer: " << edge->twin->face << std::endl;
+                }
+            } else {
+                if(!edge->twin) {
+                    std::cerr << "twin is nullptr" << std::endl;
+                }
+                else{
+                    std::cerr << "twin->face is nullptr" << std::endl;
+                }
             }
             edge = edge->next;
+            if (!edge) {
+                std::cerr << "Edge is nullptr!" << std::endl;
+            }
         } while (edge != face.edge);
     }
 }
@@ -67,7 +80,7 @@ void HalfEdgeMesh::HalfEdgeMeshSplitter() {
         }
 
         for (size_t i = 0; i < num_elements; ++i) {
-            this->faces[i]->clusterIndex = partition_result[i];
+            this->faces[i].clusterIndex = partition_result[i];
         }
     }
 }
@@ -107,7 +120,7 @@ void HalfEdgeMesh::GroupClustersWithMETIS() {
     std::unordered_map<int, idx_t> cluster_to_idx;
     std::vector<int> idx_to_cluster(num_clusters);
     idx_t num_constraints = 1;
-    idx_t num_groups = static_cast<idx_t>(std::ceil(static_cast<float>(num_clusters) / MAXN_CLUSTER_IN_CLUSTERGROUP));
+    idx_t num_groups = static_cast<idx_t>(std::ceil(static_cast<float>(num_clusters) / MAX_CLUSTER_IN_CLUSTERGROUP));
     std::vector<idx_t> partition_result(num_clusters, 0);
     idx_t objval;
     
