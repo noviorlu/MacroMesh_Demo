@@ -77,7 +77,7 @@ void clusterLOD::init()
 
 	HalfEdgeMesh* halfEdgeMesh = new HalfEdgeMesh(*m_meshConsolidator);
 	// halfEdgeMesh->computeInitialQuadrics();
-	// halfEdgeMesh->partition_loop();
+	halfEdgeMesh->partition_loop();
 	halfEdgeMesh->exportMesh(*m_meshConsolidator);
 
 	// MeshSplitter(*m_meshConsolidator);

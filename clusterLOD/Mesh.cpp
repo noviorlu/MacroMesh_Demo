@@ -14,6 +14,9 @@ using namespace std;
 
 MeshInfoMap Mesh::s_meshInfoMap;
 
+// #define MESH_SANITY_CHECK
+
+
 //----------------------------------------------------------------------------------------
 // Default constructor
 Mesh::Mesh()
@@ -40,7 +43,6 @@ static void appendVector (
 	dest.insert(dest.end(), source.begin(), source.end());
 }
 
-#define MESH_SANITY_CHECK
 
 //----------------------------------------------------------------------------------------
 Mesh::Mesh(
