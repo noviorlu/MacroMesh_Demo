@@ -139,7 +139,6 @@ void HalfEdgeMesh::exportMesh(Mesh& mesh) {
     }
 
     for (auto& face : faces) {
-        if(clusterToGroupMap[face.clusterIndex] != 0) continue;
         HalfEdge* edge = face.edge;
         do {
             size_t index = vertex_to_index[edge->origin];
@@ -159,7 +158,6 @@ void HalfEdgeMesh::exportMesh(Mesh& mesh) {
 //     }
 
 //     for (auto& face : faces) {
-//         if(clusterToGroupMap[face.clusterIndex] != 0) continue;
 //         HalfEdge* edge = face.edge;
 //         do {
 //             size_t index = vertex_to_index[edge->origin];

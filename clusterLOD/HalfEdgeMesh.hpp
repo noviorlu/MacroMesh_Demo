@@ -35,12 +35,8 @@ struct HalfEdge {
 };
 
 struct Face {
-    int clusterIndex;
     HalfEdge* edge;
-
-    Face(HalfEdge* edge) : edge(edge) {
-        clusterIndex = -1;
-    }
+    Face(HalfEdge* edge) : edge(edge) {}
 };
 
 class HalfEdgeMesh {
