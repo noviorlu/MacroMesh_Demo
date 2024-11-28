@@ -148,3 +148,23 @@ void HalfEdgeMesh::exportMesh(Mesh& mesh) {
         } while (edge != face.edge);
     }
 }
+
+// void HalfEdgeMesh::exportMesh(std::vector<Cluster>& clusterList, std::vector<ClusterGroup>& clusterGroupList) {
+
+//     std::unordered_map<const HalfVertex*, size_t> vertex_to_index;
+//     for (size_t i = 0; i < vertices.size(); ++i) {
+//         vertex_to_index[vertices[i]] = i;
+//         Vertex v(vertices[i]->position, vertices[i]->normal, vertices[i]->uv);
+//         mesh.m_vertexData.push_back(v);
+//     }
+
+//     for (auto& face : faces) {
+//         if(clusterToGroupMap[face.clusterIndex] != 0) continue;
+//         HalfEdge* edge = face.edge;
+//         do {
+//             size_t index = vertex_to_index[edge->origin];
+//             mesh.m_indexData.push_back(static_cast<unsigned int>(index));
+//             edge = edge->next;
+//         } while (edge != face.edge);
+//     }
+// }

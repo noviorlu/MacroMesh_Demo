@@ -2,6 +2,7 @@
 
 #include <queue>
 #include <iostream>
+#include <algorithm>
 #include "HalfEdgeMesh.hpp"
 
 
@@ -9,81 +10,125 @@
 #define MAX_CLUSTER_IN_CLUSTERGROUP 32
 #define MAX_TRI_IN_CLUSTERGROUP (MAX_TRI_IN_CLUSTER * MAX_CLUSTER_IN_CLUSTERGROUP)
 
-void HalfEdgeMesh::BuildAdjacencyListFromHalfEdgeMesh(std::vector<std::vector<size_t>>& adjacency_list) {
-    adjacency_list.resize(this->faces.size());
-    for (size_t i = 0; i < this->faces.size(); ++i) {
-        const Face& face = this->faces[i];
-        
+void HalfEdgeMesh::BuildAdjacencyListForRange(
+    std::vector<std::vector<size_t>>& adjacency_list,
+    size_t startIdx,
+    size_t endIdx) 
+{
+    // Adjust the size of the adjacency list to match the range
+    size_t rangeSize = endIdx - startIdx;
+    adjacency_list.resize(rangeSize);
+
+    // Iterate over the specified range of faces
+    for (size_t i = startIdx; i < endIdx; ++i) {
+        const Face& face = faces[i];
         const HalfEdge* edge = face.edge;
+
         do {
             if (edge->twin && edge->twin->face) {
-                ptrdiff_t index = edge->twin->face - this->faces.data();
-                if (index >= 0 && static_cast<size_t>(index) < this->faces.size()) {
-                    adjacency_list[i].push_back(static_cast<size_t>(index));
-                } else {
-                    std::cerr << "Invalid face pointer: " << edge->twin->face << std::endl;
-                }
-            } else {
-                if(!edge->twin) {
-                    std::cerr << "twin is nullptr" << std::endl;
-                }
-                else{
-                    std::cerr << "twin->face is nullptr" << std::endl;
+                // Compute the index of the twin's face
+                ptrdiff_t twinFaceIndex = edge->twin->face - faces.data();
+                
+                // Only consider neighbors within the specified range
+                if (twinFaceIndex >= static_cast<ptrdiff_t>(startIdx) &&
+                    twinFaceIndex < static_cast<ptrdiff_t>(endIdx)) 
+                {
+                    size_t localIndex = twinFaceIndex - startIdx;
+                    adjacency_list[i - startIdx].push_back(localIndex);
                 }
             }
             edge = edge->next;
-            if (!edge) {
-                std::cerr << "Edge is nullptr!" << std::endl;
-            }
         } while (edge != face.edge);
     }
 }
 
-void HalfEdgeMesh::HalfEdgeMeshSplitter() {
-    std::vector<std::vector<size_t>> adjacency_list;
-    BuildAdjacencyListFromHalfEdgeMesh(adjacency_list);
-    idx_t num_elements = this->faces.size();
-    idx_t num_constraints = 1;
+void HalfEdgeMesh::HalfEdgeMeshSplitterRecursive(
+    size_t startIdx,
+    size_t endIdx,
+    bool isParentClusterGroup = false
+) {
+    idx_t numElements = static_cast<idx_t>(endIdx - startIdx);
+    if (numElements <= MAX_TRI_IN_CLUSTER) {
+        m_clusterOffsets.push_back(startIdx);
+        return;
+    }
 
-    std::vector<idx_t> xadj(num_elements + 1, 0);
+    if (!isParentClusterGroup && numElements <= MAX_TRI_IN_CLUSTERGROUP) {
+        m_clusterGroupOffsets.push_back(startIdx);
+        isParentClusterGroup = true;
+    }
+
+    std::vector<std::vector<size_t>> adjacencyList;
+    BuildAdjacencyListForRange(adjacencyList, startIdx, endIdx);
+
+    idx_t numConstraints = 1;
+    std::vector<idx_t> xadj(numElements + 1, 0);
     std::vector<idx_t> adjncy;
-    std::vector<idx_t> partition_result(num_elements);
-    idx_t objval;
 
-    for (size_t i = 0; i < num_elements; ++i) {
-        xadj[i + 1] = xadj[i] + adjacency_list[i].size();
-        for (size_t neighbor : adjacency_list[i]) {
-            adjncy.push_back(neighbor);
+    for (size_t i = 0; i < numElements; ++i) {
+        xadj[i + 1] = xadj[i] + adjacencyList[i].size();
+        for (size_t neighbor : adjacencyList[i]) {
+            adjncy.push_back(static_cast<idx_t>(neighbor));
         }
     }
 
-    std::unordered_map<idx_t, std::vector<size_t>> partition_map;
+    idx_t numParts = 2;
+    std::vector<idx_t> partitionResult(numElements);
+    idx_t edgeCut;
 
-    // METIS Splitter
-    {
-        int num_parts = static_cast<int>(std::ceil(static_cast<float>(num_elements) / MAX_TRI_IN_CLUSTER));
-        int result = METIS_PartGraphKway(
-            &num_elements,
-            &num_constraints,
-            xadj.data(),
-            adjncy.data(),
-            NULL, NULL, NULL,
-            &num_parts,
-            NULL, NULL, NULL,
-            &objval,
-            partition_result.data()
-        );
-
-        if (result != METIS_OK) {
-            std::cerr << "Partitioning failed with error code: " << result << std::endl;
-            return;
-        }
-
-        for (size_t i = 0; i < num_elements; ++i) {
-            this->faces[i].clusterIndex = partition_result[i];
-        }
+    int result = METIS_PartGraphRecursive(
+        &numElements,           
+        &numConstraints,        
+        xadj.data(),            
+        adjncy.data(),          
+        NULL, NULL, NULL,       
+        &numParts,              
+        NULL, NULL, NULL,       
+        &edgeCut,               
+        partitionResult.data()  
+    );
+    if (result != METIS_OK) {
+        std::cerr << "Partitioning failed with error code: " << result << std::endl;
+        return;
     }
+
+    // Use std::partition to group faces by partitionResult
+    auto partitionPoint = std::partition(
+        faces.begin() + startIdx, faces.begin() + endIdx,
+        [&](const Face& face) {
+            size_t idx = &face - &faces[0];
+            return partitionResult[idx - startIdx] == 0;
+        }
+    );
+
+    // Calculate split indices
+    size_t midIdx = std::distance(faces.begin(), partitionPoint);
+
+    HalfEdgeMeshSplitterRecursive(startIdx, midIdx, isParentClusterGroup);
+    HalfEdgeMeshSplitterRecursive(midIdx, endIdx, isParentClusterGroup);
 }
+
+
+void HalfEdgeMesh::HalfEdgeMeshSplitter() {
+    m_clusterOffsets.clear();
+    m_clusterGroupOffsets.clear();
+
+    HalfEdgeMeshSplitterRecursive(0, faces.size());
+
+    // print the splitted cluster and cluster group
+    std::cout << "Cluster Offsets: ";
+    for (size_t offset : m_clusterOffsets) {
+        std::cout << offset << " ";
+    }
+    std::cout << std::endl;
+
+    std::cout << "Cluster Group Offsets: ";
+    for (size_t offset : m_clusterGroupOffsets) {
+        std::cout << offset << " ";
+    }
+    std::cout << std::endl;
+}
+
 
 void HalfEdgeMesh::BuildClusterAdjacency(std::unordered_map<int, std::unordered_set<int>>& cluster_adjacency) {
     for (const HalfEdge* edge : this->edges) {

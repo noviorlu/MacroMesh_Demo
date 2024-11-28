@@ -66,3 +66,23 @@ public:
 	GLuint m_ibo;
 };
 
+
+// class Cluster : public Mesh {
+// public:
+//     float Error;
+    
+//     glm::vec3 rdColor;
+
+//     Cluster(float Error);
+
+//     ~Cluster() {}
+
+// 	void draw(const ShaderProgram& shader) const override;
+// };
+
+// class ClusterGroup {
+// public:
+//     float Error;
+    
+//     std::vector<Cluster*> clusters;
+// };

@@ -5,6 +5,8 @@
 // #include <set>
 // #include <algorithm>
 
+// #include "Mesh.hpp"
+
 // glm::vec3 HSVtoRGB(float h, float s, float v) {
 //     h = fmod(h, 1.0f) * 6.0f;  // 将 h 限制在 [0, 6)
 //     int i = static_cast<int>(floor(h));
@@ -34,14 +36,12 @@
 //     return HSVtoRGB(h, s, v);
 // }
 
-// Cluster::Cluster(float Error, const Mesh& ref, const std::vector<unsigned int>& triIndices) : Error(Error), Mesh(ref, triIndices) {
+// Cluster::Cluster(float Error) : Error(Error) {
 //     rdColor = genRdColor();
 // }
 
 // void Cluster::draw(const ShaderProgram& shader) const {
-//     CHECK_GL_ERRORS;
 //     shader.SetUniform3fv("material.kd", rdColor);
-//     CHECK_GL_ERRORS;
 //     Mesh::draw(shader);
 // }
 

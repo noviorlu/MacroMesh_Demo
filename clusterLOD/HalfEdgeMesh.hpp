@@ -5,6 +5,7 @@
 #include <vector>
 #include <unordered_map>
 #include <unordered_set>
+#include <set>
 
 #include "Mesh.hpp"
 #include "cs488-framework/Vertex.hpp"
@@ -47,13 +48,15 @@ public:
     HalfEdgeMesh(const Mesh& mesh);
     ~HalfEdgeMesh();
     void exportMesh(Mesh& mesh);
+    // void exportMesh(std::vector<Cluster>& clusterList, std::vector<ClusterGroup>& clusterGroupList);
+
 private:
     std::vector<HalfVertex*> vertices;
     std::vector<HalfEdge*> edges;
     std::vector<Face> faces;
 
-    std::vector<unsigned int> m_clusterOffsets;
-    std::vector<unsigned int> m_clusterGroupOffsets;
+    std::vector<size_t> m_clusterOffsets;
+    std::vector<size_t> m_clusterGroupOffsets;
 
 
     // void computeInitialQuadrics();
@@ -63,18 +66,22 @@ private:
 
     // void simplifyMesh(size_t targetVertexCount);
 
-
-
-    
     // std::priority_queue<std::pair<float, HalfEdge>> edgeQueue;
-
-
 
 public:
     void partition_loop();
 private:
-    void BuildAdjacencyListFromHalfEdgeMesh(std::vector<std::vector<size_t>>& adjacency_list);
+    void BuildAdjacencyListForRange(
+        std::vector<std::vector<size_t>>& adjacency_list,
+        size_t startIdx,
+        size_t endIdx
+    );
     void HalfEdgeMeshSplitter();
+    void HalfEdgeMeshSplitterRecursive(
+        size_t startIdx,
+        size_t endIdx,
+        bool isParentClusterGroup
+    );
     void BuildClusterAdjacency(std::unordered_map<int, std::unordered_set<int>>& cluster_adjacency);
     void GroupClustersWithMETIS();
     
