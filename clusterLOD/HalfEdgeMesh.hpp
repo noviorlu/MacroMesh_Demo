@@ -43,7 +43,6 @@ public:
     HalfEdgeMesh(const Mesh& mesh);
     ~HalfEdgeMesh();
     void exportMesh(Mesh& mesh);
-    void exportMesh(std::vector<Cluster>& clusterList, std::vector<ClusterGroup>& clusterGroupList);
 
 private:
     std::vector<HalfVertex> m_vertices;

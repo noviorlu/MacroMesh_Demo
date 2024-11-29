@@ -13,12 +13,12 @@
 void HalfEdgeMesh::BuildAdjacencyListForRange(
     std::vector<std::vector<size_t>>& adjacency_list,
     size_t startIdx,
-    size_t endIdx) 
-{
-    size_t rangeSize = endIdx - startIdx;
+    size_t endIdx
+) {
+    size_t rangeSize = endIdx - startIdx + 1;
     adjacency_list.resize(rangeSize);
 
-    for (size_t i = startIdx; i < endIdx; ++i) {
+    for (size_t i = startIdx; i <= endIdx; ++i) {
         const HalfEdge* edge = m_faces[i].edge;
 
         do {
@@ -26,7 +26,7 @@ void HalfEdgeMesh::BuildAdjacencyListForRange(
             if (twin && twin->face) {
                 size_t twinFaceIndex = static_cast<size_t>(twin->face - &m_faces[0]);
 
-                if (twinFaceIndex >= startIdx && twinFaceIndex < endIdx) {
+                if (twinFaceIndex >= startIdx && twinFaceIndex <= endIdx) {
                     adjacency_list[i - startIdx].push_back(twinFaceIndex - startIdx);
                 }
             }
@@ -35,12 +35,17 @@ void HalfEdgeMesh::BuildAdjacencyListForRange(
     }
 }
 
+int depth = 0;
+int aimdepth = 2;
+
 void HalfEdgeMesh::HalfEdgeMeshSplitterRecursive(
     size_t startIdx,
     size_t endIdx,
     bool isParentClusterGroup = false
 ) {
-    idx_t numElements = static_cast<idx_t>(endIdx - startIdx);
+    if (startIdx >= endIdx) { return; }
+    
+    idx_t numElements = static_cast<idx_t>(endIdx - startIdx + 1);
     if (numElements <= MAX_TRI_IN_CLUSTER) {
         m_clusterOffsets.push_back(startIdx);
         return;
@@ -80,47 +85,73 @@ void HalfEdgeMesh::HalfEdgeMeshSplitterRecursive(
         &edgeCut,               
         partitionResult.data()  
     );
+
     if (result != METIS_OK) {
         std::cerr << "Partitioning failed with error code: " << result << std::endl;
         return;
     }
 
-    // Use std::partition to group m_faces by partitionResult
-    auto partitionPoint = std::partition(
-        m_faces.begin() + startIdx, m_faces.begin() + endIdx,
-        [&](const Face& face) {
-            size_t idx = &face - &m_faces[0];
-            return partitionResult[idx - startIdx] == 0;
+    size_t part0ptr = startIdx;
+    size_t part1ptr = endIdx;
+
+    while (part0ptr <= part1ptr) {
+        if (partitionResult[part0ptr - startIdx] == 0) {
+            ++part0ptr;
+        } else {
+            while (part1ptr > startIdx && partitionResult[part1ptr - startIdx] == 1) {
+                --part1ptr;
+            }
+            if (part0ptr < part1ptr) {
+                // before swapping update the halfedge face pointers
+
+                HalfEdge* edge0 = m_faces[part0ptr].edge;
+                do {
+                    edge0->face = &m_faces[part1ptr];
+                    edge0 = edge0->next;
+                } while (edge0 != m_faces[part0ptr].edge);
+
+                HalfEdge* edge1 = m_faces[part1ptr].edge;
+                do {
+                    edge1->face = &m_faces[part0ptr];
+                    edge1 = edge1->next;
+                } while (edge1 != m_faces[part1ptr].edge);
+                
+                std::swap(m_faces[part0ptr], m_faces[part1ptr]);
+                
+                ++part0ptr;
+                --part1ptr;
+            }
         }
-    );
+    }
 
-    // Calculate split indices
-    size_t midIdx = std::distance(m_faces.begin(), partitionPoint);
+    size_t midIdx = part0ptr;
 
-    HalfEdgeMeshSplitterRecursive(startIdx, midIdx, isParentClusterGroup);
+    HalfEdgeMeshSplitterRecursive(startIdx, midIdx - 1, isParentClusterGroup);
     HalfEdgeMeshSplitterRecursive(midIdx, endIdx, isParentClusterGroup);
 }
-
 
 void HalfEdgeMesh::HalfEdgeMeshSplitter() {
     m_clusterOffsets.clear();
     m_clusterGroupOffsets.clear();
 
-    HalfEdgeMeshSplitterRecursive(0, m_faces.size());
+    HalfEdgeMeshSplitterRecursive(0, m_faces.size() - 1);
 
-    // print the splitted cluster and cluster group
+    // print the cluster and cluster group offsets
     std::cout << "Cluster Offsets: ";
     for (size_t offset : m_clusterOffsets) {
         std::cout << offset << " ";
     }
+
     std::cout << std::endl;
 
     std::cout << "Cluster Group Offsets: ";
     for (size_t offset : m_clusterGroupOffsets) {
         std::cout << offset << " ";
     }
+
     std::cout << std::endl;
 }
+
 
 void HalfEdgeMesh::partition_loop(){
 
