@@ -34,11 +34,12 @@ HalfEdgeMesh::HalfEdgeMesh(const Mesh& mesh) {
         edge1->prev = edge0;
         edge2->prev = edge1;
 
-        m_faces.push_back(Face(edge0));
+        Face* face = new Face(edge0);
+        m_faces.push_back(face);
 
-        edge0->face = &m_faces.back();
-        edge1->face = &m_faces.back();
-        edge2->face = &m_faces.back();
+        edge0->face = face;
+        edge1->face = face;
+        edge2->face = face;
 
         m_edges.push_back(edge0);
         m_edges.push_back(edge1);
@@ -88,7 +89,7 @@ void HalfEdgeMesh::exportMesh(std::vector<Cluster>& clusters, std::vector<Cluste
         unsigned int clusterVertexIndex = 0;
 
         for (size_t faceIdx = startFace; faceIdx < endFace; ++faceIdx) {
-            HalfEdge* edge = m_faces[faceIdx].edge;
+            HalfEdge* edge = m_faces[faceIdx]->edge;
             do {
                 HalfVertex* vertex = edge->origin;
                 if (vertexIndexMap.find(vertex) == vertexIndexMap.end()) {
@@ -101,7 +102,7 @@ void HalfEdgeMesh::exportMesh(std::vector<Cluster>& clusters, std::vector<Cluste
                 }
                 cluster.m_indexData.push_back(vertexIndexMap[vertex]);
                 edge = edge->next;
-            } while (edge != m_faces[faceIdx].edge);
+            } while (edge != m_faces[faceIdx]->edge);
         }
         clusters.push_back(std::move(cluster));
     }

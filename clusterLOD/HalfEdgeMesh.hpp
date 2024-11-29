@@ -55,7 +55,7 @@ public:
 private:
     std::vector<HalfVertex*> m_vertices;
     std::vector<HalfEdge*> m_edges;
-    std::vector<Face> m_faces;
+    std::vector<Face*> m_faces;
 
 public:
     void partition_loop();

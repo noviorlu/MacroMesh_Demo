@@ -5,6 +5,7 @@
 #include <algorithm>
 #include "HalfEdgeMesh.hpp"
 
+// #define DEBUG_MESHPROCESSING
 
 #define MAX_TRI_IN_CLUSTER 256
 #define MAX_CLUSTER_IN_CLUSTERGROUP 32
@@ -15,34 +16,50 @@ void HalfEdgeMesh::BuildAdjacencyListForRange(
     size_t startIdx,
     size_t endIdx
 ) {
+    std::unordered_map<const Face*, size_t> faceToIndexMap;
+    for (size_t i = startIdx; i <= endIdx; ++i) {
+        faceToIndexMap[m_faces[i]] = i - startIdx;
+    }
+
     size_t rangeSize = endIdx - startIdx + 1;
     adjacency_list.resize(rangeSize);
 
     for (size_t i = startIdx; i <= endIdx; ++i) {
-        const HalfEdge* edge = m_faces[i].edge;
+        const HalfEdge* edge = m_faces[i]->edge;
 
         do {
             const HalfEdge* twin = edge->twin;
             if (twin && twin->face) {
-                size_t twinFaceIndex = static_cast<size_t>(twin->face - &m_faces[0]);
-
-                if (twinFaceIndex >= startIdx && twinFaceIndex <= endIdx) {
-                    adjacency_list[i - startIdx].push_back(twinFaceIndex - startIdx);
+                auto it = faceToIndexMap.find(twin->face);
+                if (it != faceToIndexMap.end()) {
+                    adjacency_list[i - startIdx].push_back(it->second);
                 }
             }
             edge = edge->next;
-        } while (edge != m_faces[i].edge);
+        } while (edge != m_faces[i]->edge);
     }
 }
 
+#ifdef DEBUG_MESHPROCESSING
 int depth = 0;
-int aimdepth = 2;
+int aimdepth = 3;
+#endif
 
 void HalfEdgeMesh::HalfEdgeMeshSplitterRecursive(
     size_t startIdx,
     size_t endIdx,
     bool isParentClusterGroup = false
 ) {
+
+#ifdef DEBUG_MESHPROCESSING
+    ++depth;
+    if(depth == aimdepth){
+        std::cout << "startIdx: " << startIdx << " endIdx: " << endIdx << std::endl;
+        m_clusterOffsets.push_back(startIdx);
+        return;
+    }
+#endif
+
     if (startIdx >= endIdx) { return; }
     
     idx_t numElements = static_cast<idx_t>(endIdx - startIdx + 1);
@@ -102,22 +119,7 @@ void HalfEdgeMesh::HalfEdgeMeshSplitterRecursive(
                 --part1ptr;
             }
             if (part0ptr < part1ptr) {
-                // before swapping update the halfedge face pointers
-
-                HalfEdge* edge0 = m_faces[part0ptr].edge;
-                do {
-                    edge0->face = &m_faces[part1ptr];
-                    edge0 = edge0->next;
-                } while (edge0 != m_faces[part0ptr].edge);
-
-                HalfEdge* edge1 = m_faces[part1ptr].edge;
-                do {
-                    edge1->face = &m_faces[part0ptr];
-                    edge1 = edge1->next;
-                } while (edge1 != m_faces[part1ptr].edge);
-                
                 std::swap(m_faces[part0ptr], m_faces[part1ptr]);
-                
                 ++part0ptr;
                 --part1ptr;
             }
@@ -127,7 +129,13 @@ void HalfEdgeMesh::HalfEdgeMeshSplitterRecursive(
     size_t midIdx = part0ptr;
 
     HalfEdgeMeshSplitterRecursive(startIdx, midIdx - 1, isParentClusterGroup);
+#ifdef DEBUG_MESHPROCESSING
+    depth--;
+#endif
     HalfEdgeMeshSplitterRecursive(midIdx, endIdx, isParentClusterGroup);
+#ifdef DEBUG_MESHPROCESSING
+    depth--;
+#endif
 }
 
 void HalfEdgeMesh::HalfEdgeMeshSplitter() {
@@ -135,6 +143,21 @@ void HalfEdgeMesh::HalfEdgeMeshSplitter() {
     m_clusterGroupOffsets.clear();
 
     HalfEdgeMeshSplitterRecursive(0, m_faces.size() - 1);
+
+#ifdef DEBUG_MESHPROCESSING
+    //print the cluster and cluster group offsets
+    std::cout << "Cluster Offsets: ";
+    for (size_t i = 0; i < m_clusterOffsets.size(); ++i) {
+        std::cout << m_clusterOffsets[i] << " ";
+    }
+    std::cout << std::endl;
+
+    std::cout << "Cluster Group Offsets: ";
+    for (size_t i = 0; i < m_clusterGroupOffsets.size(); ++i) {
+        std::cout << m_clusterGroupOffsets[i] << " ";
+    }
+    std::cout << std::endl;
+#endif
 }
 
 
