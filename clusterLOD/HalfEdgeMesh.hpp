@@ -1,17 +1,14 @@
 #pragma once
-#include <vector>
-#include <glm/glm.hpp>
-
-#include <vector>
-#include <unordered_map>
-#include <unordered_set>
-#include <set>
-
 #include "Mesh.hpp"
 #include "cs488-framework/Vertex.hpp"
 
+#include <glm/glm.hpp>
+
+#include <queue>
+
 struct HalfVertex;
 struct HalfEdge;
+struct Edge;
 struct Face;
 
 struct HalfVertex : public Vertex {
@@ -25,6 +22,11 @@ struct HalfVertex : public Vertex {
         : Vertex(vertex), edge(nullptr), quadric(0.0f) {}
 };
 
+struct Face {
+    HalfEdge* edge;
+    Face(HalfEdge* edge) : edge(edge) {}
+};
+
 struct HalfEdge {
     HalfVertex* origin;
     HalfEdge* twin;
@@ -33,10 +35,16 @@ struct HalfEdge {
     Face* face;
 };
 
-struct Face {
+struct EdgeCost {
+    float cost;
+    glm::vec3 optimalPosition;
     HalfEdge* edge;
-    Face(HalfEdge* edge) : edge(edge) {}
+
+    bool operator<(const EdgeCost& other) const {
+        return cost < other.cost;
+    }
 };
+typedef std::priority_queue<EdgeCost, std::vector<EdgeCost>, std::greater<EdgeCost>> QEMqueue;
 
 class HalfEdgeMesh {
 public:
@@ -53,15 +61,11 @@ private:
 public:
     void partition_loop();
 
-    // void computeInitialQuadrics();
-    // void computeEdgeCosts();
-    // void contractEdge(const HalfEdge* edge);
-    // glm::vec3 computeOptimalPosition(const HalfEdge* edge, bool& valid);
-
-    // void simplifyMesh(size_t targetVertexCount);
-
-    // std::priority_queue<std::pair<float, HalfEdge>> edgeQueue;
-
+// private:
+//     void computeInitialQuadrics();
+//     void computeEdgeCost(HalfEdge* edge, EdgeCost& edgeCost);
+//     void simplifyMesh();
+//     void mergeVertices(HalfVertex* v1, HalfVertex* v2, const glm::vec3& newPosition);
 
 private:
     void BuildAdjacencyListForRange(

@@ -1,12 +1,6 @@
 #include "HalfEdgeMesh.hpp"
 
 #include <unordered_map>
-#include <utility>
-#include <iostream>
-#include <algorithm>
-#include <cmath>
-
-// #define HALF_EDGE_MESH_SANITY_CHECK
 
 HalfEdgeMesh::HalfEdgeMesh(const Mesh& mesh) {
     m_faces.reserve(mesh.m_indexData.size() / 3);
