@@ -137,19 +137,17 @@ void HalfEdgeMesh::HalfEdgeMeshSplitter() {
     HalfEdgeMeshSplitterRecursive(0, m_faces.size() - 1);
 
     // print the cluster and cluster group offsets
-    std::cout << "Cluster Offsets: ";
-    for (size_t offset : m_clusterOffsets) {
-        std::cout << offset << " ";
-    }
+    // std::cout << "Cluster Offsets: ";
+    // for (size_t offset : m_clusterOffsets) {
+    //     std::cout << offset << " ";
+    // }
+    // std::cout << std::endl;
 
-    std::cout << std::endl;
-
-    std::cout << "Cluster Group Offsets: ";
-    for (size_t offset : m_clusterGroupOffsets) {
-        std::cout << offset << " ";
-    }
-
-    std::cout << std::endl;
+    // std::cout << "Cluster Group Offsets: ";
+    // for (size_t offset : m_clusterGroupOffsets) {
+    //     std::cout << offset << " ";
+    // }
+    // std::cout << std::endl;
 }
 
 

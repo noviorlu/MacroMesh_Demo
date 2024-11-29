@@ -4,6 +4,7 @@
 #include <utility>
 #include <iostream>
 #include <algorithm>
+#include <cmath>
 
 // #define HALF_EDGE_MESH_SANITY_CHECK
 
@@ -94,8 +95,6 @@ void HalfEdgeMesh::exportMesh(Mesh& mesh) {
 
     int i = 0;
     for (const auto& face : m_faces) {
-        if(i >= m_clusterOffsets[1]) break;
-        
         // only export the first range faces
         HalfEdge* edge = face.edge;
         do {
@@ -105,5 +104,51 @@ void HalfEdgeMesh::exportMesh(Mesh& mesh) {
         } while (edge != face.edge);
 
         i++;
+    }
+}
+
+void HalfEdgeMesh::exportMesh(std::vector<Cluster>& clusters, std::vector<ClusterGroup>& clusterGroups) {
+    clusters.clear();
+    clusterGroups.clear();
+
+    // 创建簇 (Cluster)
+    for (size_t i = 0; i < m_clusterOffsets.size(); ++i) {
+        size_t startFace = m_clusterOffsets[i];
+        size_t endFace = (i + 1 < m_clusterOffsets.size()) ? m_clusterOffsets[i + 1] : m_faces.size();
+
+        Cluster cluster(0.0f);
+        std::unordered_map<size_t, unsigned int> vertexIndexMap;
+        unsigned int clusterVertexIndex = 0;
+
+        for (size_t faceIdx = startFace; faceIdx < endFace; ++faceIdx) {
+            HalfEdge* edge = m_faces[faceIdx].edge;
+            do {
+                size_t globalVertexIndex = static_cast<size_t>(edge->origin - &m_vertices[0]);
+                if (vertexIndexMap.find(globalVertexIndex) == vertexIndexMap.end()) {
+                    vertexIndexMap[globalVertexIndex] = clusterVertexIndex++;
+                    cluster.m_vertexData.emplace_back(
+                        m_vertices[globalVertexIndex].position,
+                        m_vertices[globalVertexIndex].normal,
+                        m_vertices[globalVertexIndex].uv
+                    );
+                }
+                cluster.m_indexData.push_back(vertexIndexMap[globalVertexIndex]);
+                edge = edge->next;
+            } while (edge != m_faces[faceIdx].edge);
+        }
+        clusters.push_back(std::move(cluster));
+    }
+
+    // 创建簇组 (Cluster Group)
+    for (size_t i = 0; i < m_clusterGroupOffsets.size(); ++i) {
+        size_t startCluster = m_clusterGroupOffsets[i];
+        size_t endCluster = (i + 1 < m_clusterGroupOffsets.size()) ? m_clusterGroupOffsets[i + 1] : clusters.size();
+
+        ClusterGroup group;
+        for (size_t clusterIdx = startCluster; clusterIdx < endCluster; ++clusterIdx) {
+            group.clusters.push_back(&clusters[clusterIdx]);
+        }
+
+        clusterGroups.push_back(std::move(group));
     }
 }
