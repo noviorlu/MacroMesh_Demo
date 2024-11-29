@@ -8,7 +8,7 @@ HalfEdgeMesh::HalfEdgeMesh(const Mesh& mesh) {
     m_edges.reserve(mesh.m_indexData.size());
     
     for (size_t i = 0; i < mesh.m_vertexData.size(); ++i) {
-        m_vertices.push_back(HalfVertex(mesh.m_vertexData[i]));
+        m_vertices.push_back(new HalfVertex(mesh.m_vertexData[i]));
     }
 
     std::unordered_map<std::pair<int, int>, HalfEdge*, pair_hash> edgeMap;
@@ -22,9 +22,9 @@ HalfEdgeMesh::HalfEdgeMesh(const Mesh& mesh) {
         HalfEdge* edge1 = new HalfEdge();
         HalfEdge* edge2 = new HalfEdge();
 
-        edge0->origin = &m_vertices[v0];
-        edge1->origin = &m_vertices[v1];
-        edge2->origin = &m_vertices[v2];
+        edge0->origin = m_vertices[v0];
+        edge1->origin = m_vertices[v1];
+        edge2->origin = m_vertices[v2];
 
         edge0->next = edge1;
         edge1->next = edge2;
@@ -75,32 +75,6 @@ HalfEdgeMesh::~HalfEdgeMesh() {
     }
 }
 
-void HalfEdgeMesh::exportMesh(Mesh& mesh) {
-    mesh.m_vertexData.clear();
-    mesh.m_indexData.clear();
-
-    for (const auto& halfVertex : m_vertices) {
-        mesh.m_vertexData.emplace_back(
-            halfVertex.position,
-            halfVertex.normal,
-            halfVertex.uv
-        );
-    }
-
-    int i = 0;
-    for (const auto& face : m_faces) {
-        // only export the first range faces
-        HalfEdge* edge = face.edge;
-        do {
-            size_t index = static_cast<size_t>(edge->origin - &m_vertices[0]);
-            mesh.m_indexData.push_back(static_cast<unsigned int>(index));
-            edge = edge->next;
-        } while (edge != face.edge);
-
-        i++;
-    }
-}
-
 void HalfEdgeMesh::exportMesh(std::vector<Cluster>& clusters, std::vector<ClusterGroup>& clusterGroups) {
     clusters.clear();
     clusterGroups.clear();
@@ -110,22 +84,22 @@ void HalfEdgeMesh::exportMesh(std::vector<Cluster>& clusters, std::vector<Cluste
         size_t endFace = (i + 1 < m_clusterOffsets.size()) ? m_clusterOffsets[i + 1] : m_faces.size();
 
         Cluster cluster(0.0f);
-        std::unordered_map<size_t, unsigned int> vertexIndexMap;
+        std::unordered_map<HalfVertex*, unsigned int> vertexIndexMap; // Key changed to Vertex*.
         unsigned int clusterVertexIndex = 0;
 
         for (size_t faceIdx = startFace; faceIdx < endFace; ++faceIdx) {
             HalfEdge* edge = m_faces[faceIdx].edge;
             do {
-                size_t globalVertexIndex = static_cast<size_t>(edge->origin - &m_vertices[0]);
-                if (vertexIndexMap.find(globalVertexIndex) == vertexIndexMap.end()) {
-                    vertexIndexMap[globalVertexIndex] = clusterVertexIndex++;
+                HalfVertex* vertex = edge->origin;
+                if (vertexIndexMap.find(vertex) == vertexIndexMap.end()) {
+                    vertexIndexMap[vertex] = clusterVertexIndex++;
                     cluster.m_vertexData.emplace_back(
-                        m_vertices[globalVertexIndex].position,
-                        m_vertices[globalVertexIndex].normal,
-                        m_vertices[globalVertexIndex].uv
+                        vertex->position,
+                        vertex->normal,
+                        vertex->uv
                     );
                 }
-                cluster.m_indexData.push_back(vertexIndexMap[globalVertexIndex]);
+                cluster.m_indexData.push_back(vertexIndexMap[vertex]);
                 edge = edge->next;
             } while (edge != m_faces[faceIdx].edge);
         }

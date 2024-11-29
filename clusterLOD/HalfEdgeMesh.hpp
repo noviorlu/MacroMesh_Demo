@@ -50,11 +50,10 @@ class HalfEdgeMesh {
 public:
     HalfEdgeMesh(const Mesh& mesh);
     ~HalfEdgeMesh();
-    void exportMesh(Mesh& mesh);
     void exportMesh(std::vector<Cluster>& clusters, std::vector<ClusterGroup>& clusterGroups);
 
 private:
-    std::vector<HalfVertex> m_vertices;
+    std::vector<HalfVertex*> m_vertices;
     std::vector<HalfEdge*> m_edges;
     std::vector<Face> m_faces;
 
