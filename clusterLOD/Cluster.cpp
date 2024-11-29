@@ -2,9 +2,9 @@
 #include "Mesh.hpp"
 
 glm::vec3 HSVtoRGB(float h, float s, float v) {
-    h = fmod(h, 1.0f) * 6.0f;  // 将 h 限制在 [0, 6)
+    h = fmod(h, 1.0f) * 6.0f;
     int i = static_cast<int>(floor(h));
-    float f = h - i; // 小数部分
+    float f = h - i;
     float p = v * (1.0f - s);
     float q = v * (1.0f - f * s);
     float t = v * (1.0f - (1.0f - f) * s);
@@ -16,15 +16,15 @@ glm::vec3 HSVtoRGB(float h, float s, float v) {
         case 3: return glm::vec3(p, q, v);
         case 4: return glm::vec3(t, p, v);
         case 5: return glm::vec3(v, p, q);
-        default: return glm::vec3(0.0f, 0.0f, 0.0f); // 容错
+        default: return glm::vec3(0.0f, 0.0f, 0.0f);
     }
 }
 
 glm::vec3 genRdColor(){
     // generate a random hue (h) in [0, 1)
-    float h = static_cast<float>(rand()) / RAND_MAX; // 随机色相
-    float s = 0.8f; // 固定饱和度，接近鲜艳的颜色
-    float v = 0.8f; // 固定亮度
+    float h = static_cast<float>(rand()) / RAND_MAX;
+    float s = 0.8f;
+    float v = 0.8f;
 
     // convert HSV to RGB
     return HSVtoRGB(h, s, v);

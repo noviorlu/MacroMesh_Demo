@@ -50,9 +50,8 @@ private:
     std::vector<HalfEdge*> m_edges;
     std::vector<Face> m_faces;
 
-    std::vector<size_t> m_clusterOffsets;
-    std::vector<size_t> m_clusterGroupOffsets;
-
+public:
+    void partition_loop();
 
     // void computeInitialQuadrics();
     // void computeEdgeCosts();
@@ -63,8 +62,7 @@ private:
 
     // std::priority_queue<std::pair<float, HalfEdge>> edgeQueue;
 
-public:
-    void partition_loop();
+
 private:
     void BuildAdjacencyListForRange(
         std::vector<std::vector<size_t>>& adjacency_list,
@@ -77,6 +75,7 @@ private:
         size_t endIdx,
         bool isParentClusterGroup
     );
-    
-    std::unordered_map<int, int> clusterToGroupMap;
+
+    std::vector<size_t> m_clusterOffsets;
+    std::vector<size_t> m_clusterGroupOffsets;
 };

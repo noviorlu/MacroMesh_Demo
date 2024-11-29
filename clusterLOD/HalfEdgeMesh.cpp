@@ -111,7 +111,6 @@ void HalfEdgeMesh::exportMesh(std::vector<Cluster>& clusters, std::vector<Cluste
     clusters.clear();
     clusterGroups.clear();
 
-    // 创建簇 (Cluster)
     for (size_t i = 0; i < m_clusterOffsets.size(); ++i) {
         size_t startFace = m_clusterOffsets[i];
         size_t endFace = (i + 1 < m_clusterOffsets.size()) ? m_clusterOffsets[i + 1] : m_faces.size();
@@ -139,7 +138,6 @@ void HalfEdgeMesh::exportMesh(std::vector<Cluster>& clusters, std::vector<Cluste
         clusters.push_back(std::move(cluster));
     }
 
-    // 创建簇组 (Cluster Group)
     for (size_t i = 0; i < m_clusterGroupOffsets.size(); ++i) {
         size_t startCluster = m_clusterGroupOffsets[i];
         size_t endCluster = (i + 1 < m_clusterGroupOffsets.size()) ? m_clusterGroupOffsets[i + 1] : clusters.size();
