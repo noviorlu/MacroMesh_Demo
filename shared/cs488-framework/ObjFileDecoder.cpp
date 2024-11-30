@@ -331,7 +331,7 @@ void ObjFileDecoder::decodeNoUV(
     auto getOrAddVertexIndex = [&](int posIdx, int normIdx, float weight) -> unsigned int {
         glm::vec3 position = temp_positions[posIdx];
         glm::vec3 normal = temp_normals[normIdx];
-        glm::vec2 uv = glm::vec2(0.0f, 0.0f); // Default UV value
+        glm::vec2 uv = glm::vec2(0.0f, 0.0f); // No UV data, use default value
 
         Vertex vertex(position, normal, uv);
         auto it = uniqueVertexMap.find(vertex);
@@ -341,6 +341,7 @@ void ObjFileDecoder::decodeNoUV(
             float& accumulatedWeight = it->second.second;
             float newWeight = accumulatedWeight + weight;
 
+            // Update the existing vertex normal with area-weighted average
             vertices[existingIndex].normal = (vertices[existingIndex].normal * accumulatedWeight + normal * weight) / newWeight;
 
             accumulatedWeight = newWeight;
@@ -378,13 +379,15 @@ void ObjFileDecoder::decodeNoUV(
                 normIdx[i]--;
             }
 
+            // Calculate the triangle area (same logic as with UVs)
             glm::vec3 edge1 = temp_positions[posIdx[1]] - temp_positions[posIdx[0]];
             glm::vec3 edge2 = temp_positions[posIdx[2]] - temp_positions[posIdx[0]];
             float triangleArea = glm::length(glm::cross(edge1, edge2)) * 0.5f;
 
+            // Pass the triangle area as weight
             indices.push_back(getOrAddVertexIndex(posIdx[0], normIdx[0], triangleArea));
             indices.push_back(getOrAddVertexIndex(posIdx[1], normIdx[1], triangleArea));
-            indices.push_back(getOrAddVertexIndex(posIdx[2], normIdx[1], triangleArea));
+            indices.push_back(getOrAddVertexIndex(posIdx[2], normIdx[2], triangleArea));
         }
     }
 
@@ -395,5 +398,22 @@ void ObjFileDecoder::decodeNoUV(
         objectName = baseName ? baseName + 1 : objFilePath;
         objectName = objectName.substr(0, objectName.find('.'));
     }
+
+    // Validation to ensure no boundary edges
+    if (indices.size() % 3 != 0) {
+        throw std::runtime_error("Invalid mesh: The number of indices is not a multiple of 3.");
+    }
+    for (size_t i = 0; i < indices.size(); i += 3) {
+        unsigned int idx0 = indices[i];
+        unsigned int idx1 = indices[i + 1];
+        unsigned int idx2 = indices[i + 2];
+        if (idx0 == idx1 || idx1 == idx2 || idx2 == idx0) {
+            throw std::runtime_error("Invalid mesh: Degenerate triangle detected.");
+        }
+    }
 }
+
+
+
+
 

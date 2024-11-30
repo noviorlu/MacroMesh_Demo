@@ -35,6 +35,9 @@ A4_[Ss]olution/A4
 *exe
 *lib
 *dll
+*pdb
+*dll
+*sln
 
 proposal/*
 !proposal/proposal.pdf

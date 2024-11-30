@@ -39,6 +39,13 @@ namespace std {
             return Vertex::Hash()(vertex);
         }
     };
+
+    template <>
+    struct hash<glm::vec3> {
+        std::size_t operator()(const glm::vec3& v) const noexcept {
+            return std::hash<float>()(v.x) ^ (std::hash<float>()(v.y) << 1) ^ (std::hash<float>()(v.z) << 2);
+        }
+    };
 }
 
 struct pair_hash {

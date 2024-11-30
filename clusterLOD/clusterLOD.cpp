@@ -70,15 +70,25 @@ void clusterLOD::init()
 
 
 	m_meshConsolidator = new Mesh(
-        std::initializer_list<std::string>{
-            getAssetFilePath("../../models/bunny/bunny.obj")
-        }
+        // std::initializer_list<std::string>{
+            // getAssetFilePath("../../models/bunny/bunny.obj")
+            // getAssetFilePath("../../models/cube.obj")
+            // getAssetFilePath("../../models/suzanne.obj")
+            // getAssetFilePath("../../models/dragon/dragon.obj")
+        // }
     );
 
-	HalfEdgeMesh* halfEdgeMesh = new HalfEdgeMesh(*m_meshConsolidator);
-	halfEdgeMesh->partition_loop();
-	halfEdgeMesh->exportMesh(m_meshConsolidator->m_clusterList, m_meshConsolidator->m_clusterGroupList);
+	
 
+	// HalfEdgeMesh* halfEdgeMesh = new HalfEdgeMesh(*m_meshConsolidator);
+
+	HalfEdgeMesh* halfEdgeMesh = new HalfEdgeMesh("../../models/suzanne.obj");
+	// halfEdgeMesh->partition_loop();
+	// halfEdgeMesh->exportMesh(m_meshConsolidator->m_clusterList, m_meshConsolidator->m_clusterGroupList);
+	halfEdgeMesh->QEM();
+	halfEdgeMesh->exportMesh(*m_meshConsolidator);
+	// print triangle count
+	std::cout << "Triangle count: " << m_meshConsolidator->m_indexData.size() / 3 << std::endl;
 	// MeshSplitter(*m_meshConsolidator);
 	// std::vector<ClusterGroup*> cluster_groups;
 	// clusterGrouping(*m_meshConsolidator, cluster_groups);

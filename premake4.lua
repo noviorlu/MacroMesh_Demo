@@ -3,124 +3,105 @@ workspace "CS488_Framework"
     platforms { "x86", "x64" }
     location "vsproject"
 
+    -- 设置架构
     filter "platforms:x86"
         architecture "x86"
     filter "platforms:x64"
         architecture "x64"
 
-includeDirList = includeDirList or { 
+-- 包含目录和库路径
+includeDirList = { 
     "shared",
     "shared/gl3w",
     "shared/imgui",
     "shared/include"
 }
 
-libDirectories = libDirectories or {}
+libDirectories = {
+    "lib"
+}
 
 buildOptions = {"-std=c++17"}
 
--- Get the current OS platform
-PLATFORM = os.target()  -- 使用 os.target() 替代 os.get()
+-- 获取当前系统平台
+PLATFORM = os.target()
 
--- Add vcpkg paths for Lua
+-- 添加 vcpkg 路径（根据需要调整路径）
 if PLATFORM == "windows" then
-    local vcpkgBasePath = "C:/projects/vcpkg/installed/x86-mingw-static"
+    local vcpkgBasePath = "C:/projects/vcpkg/installed/x64-windows"
     table.insert(includeDirList, vcpkgBasePath .. "/include")
     table.insert(libDirectories, vcpkgBasePath .. "/lib")
 end
 
--- Build glfw3 static library and copy it into <cs488_root>/lib if it is not
--- already present.
-if not os.isfile("lib/libglfw3.a") then
-    os.chdir("shared/glfw-3.3.8")
-    os.mkdir("build")
-    os.chdir("build")
-    os.execute("cmake ../")
-    os.execute("make")
-    os.chdir("../../../")
-    os.mkdir("lib")
-    os.execute("cp shared/glfw-3.3.8/build/src/libglfw3.a lib/")
+-- GLFW 静态库生成
+if PLATFORM == "windows" and not os.isfile("lib/glfw3.lib") then
+    os.execute("cmake -S shared/glfw-3.3.8 -B shared/glfw-3.3.8/build -G \"Visual Studio 16 2019\" -A x64")
+    os.execute("cmake --build shared/glfw-3.3.8/build --config Release")
+    os.execute("copy shared\\glfw-3.3.8\\build\\src\\Release\\glfw3.lib lib\\glfw3.lib")
 end
 
-if not os.isfile("lib/liblua.a") then
-    local vcpkgLuaPath = "C:/projects/vcpkg/installed/x86-mingw-static"
-    if PLATFORM == "windows" and os.isdir(vcpkgLuaPath) then
+-- Lua 静态库生成
+if PLATFORM == "windows" and not os.isfile("lib/lua.lib") then
+    local vcpkgLuaPath = "C:/projects/vcpkg/installed/x64-windows"
+    if os.isdir(vcpkgLuaPath) then
         print("Using Lua from vcpkg.")
         os.execute("mkdir lib")
-        os.execute("copy " .. vcpkgLuaPath .. "\\lib\\liblua.a lib\\liblua.a")
+        os.execute("copy " .. vcpkgLuaPath .. "\\lib\\lua.lib lib\\lua.lib")
         table.insert(includeDirList, vcpkgLuaPath .. "\\include")
     else
-        os.chdir("shared/lua-5.4.6")
-        local result
-        if PLATFORM == "macosx" then
-            result = os.execute("make macosx")
-        elseif PLATFORM == "linux" then
-            result = os.execute("make linux")
-        elseif PLATFORM == "windows" then
-            result = os.execute("make mingw")
-        end
-
-        print("Make result: ", result)
-
-        os.chdir("../../")
-        if PLATFORM == "windows" then
-            os.execute("copy shared\\lua-5.4.6\\src\\liblua.a lib\\liblua.a")
-        else
-            os.execute("cp shared/lua-5.4.6/src/liblua.a lib/")
-        end
+        os.execute("cmake -S shared/lua-5.4.6 -B shared/lua-5.4.6/build -G \"Visual Studio 16 2019\" -A x64")
+        os.execute("cmake --build shared/lua-5.4.6/build --config Release")
+        os.execute("copy shared\\lua-5.4.6\\src\\Release\\lua.lib lib\\lua.lib")
     end
 end
 
+-- 静态库解决方案
 solution "BuildStaticLibs"
     configurations { "Debug", "Release" }
+    platforms { "x86", "x64" }
 
-    configuration "Debug"
-        defines { "DEBUG" }
-        flags { "Symbols" }
+    filter "configurations:Debug"
+        runtime "Debug"
+        symbols "On"
 
-    configuration "Release"
-        defines { "NDEBUG" }
-        flags { "Optimize" }
+    filter "configurations:Release"
+        runtime "Release"
+        optimize "On"
 
-    -- Builds cs488-framework static library
-    project "cs488-framework"
-        kind "StaticLib"
-        language "C++"
-        location "build"
-        objdir "build"
-        targetdir "lib"
-        buildoptions (buildOptions)
-        includedirs (includeDirList)
-        files { "shared/cs488-framework/*.cpp" }
+-- cs488-framework 项目
+project "cs488-framework"
+    kind "StaticLib"
+    language "C++"
+    location "build/cs488-framework"
+    objdir "build/cs488-framework/obj"
+    targetdir "lib"
+    buildoptions (buildOptions)
+    includedirs (includeDirList)
+    files { "shared/cs488-framework/*.cpp", "shared/cs488-framework/*.h" }
 
-    -- Build imgui static library
-    project "imgui"
-        kind "StaticLib"
-        language "C++"
-        location "build"
-        objdir "build"
-        targetdir "lib"
-        includedirs (includeDirList)
-        includedirs {
-            "shared/imgui/examples/opengl3_example",
-            "shared/imgui/examples/libs/gl3w/",
-        }
-        files { 
-            "shared/imgui/*.cpp",
-            "shared/gl3w/GL/gl3w.c"
-        }
+-- imgui 项目
+project "imgui"
+    kind "StaticLib"
+    language "C++"
+    location "build/imgui"
+    objdir "build/imgui/obj"
+    targetdir "lib"
+    includedirs (includeDirList)
+    includedirs {
+        "shared/imgui/examples/opengl3_example",
+        "shared/imgui/examples/libs/gl3w/"
+    }
+    files { 
+        "shared/imgui/*.cpp",
+        "shared/gl3w/GL/gl3w.c"
+    }
 
-    -- Build lodepng static library
-    project "lodepng"
-        kind "StaticLib"
-        language "C++"
-        location "build"
-        objdir "build"
-        targetdir "lib"
-        includedirs (includeDirList)
-        includedirs {
-            "shared/lodepng"
-        }
-        files { 
-            "shared/lodepng/lodepng.cpp"
-        }
+-- lodepng 项目
+project "lodepng"
+    kind "StaticLib"
+    language "C++"
+    location "build/lodepng"
+    objdir "build/lodepng/obj"
+    targetdir "lib"
+    includedirs (includeDirList)
+    files { "shared/lodepng/lodepng.cpp" }

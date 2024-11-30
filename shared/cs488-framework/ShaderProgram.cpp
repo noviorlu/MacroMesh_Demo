@@ -185,12 +185,13 @@ void ShaderProgram::checkCompilationStatus (
         // Get the length in chars of the compilation error message.
         glGetShaderiv(shaderObject, GL_INFO_LOG_LENGTH, &errorMessageLength);
 
-        // Retrieve the compilation error message.
-        GLchar errorMessage[errorMessageLength + 1]; // Add 1 for null terminator
-        glGetShaderInfoLog(shaderObject, errorMessageLength, NULL, errorMessage);
+        // Use a vector to store the error message.
+        std::vector<GLchar> errorMessage(errorMessageLength + 1); // +1 for null terminator
+        glGetShaderInfoLog(shaderObject, errorMessageLength, nullptr, errorMessage.data());
 
-        string message = "Error Compiling Shader: ";
-        message += errorMessage;
+        // Create the error message string.
+        std::string message = "Error Compiling Shader: ";
+        message += errorMessage.data();
 
         throw ShaderException(message);
     }
@@ -215,15 +216,16 @@ void ShaderProgram::checkLinkStatus() {
     glGetProgramiv(programObject, GL_LINK_STATUS, &linkSuccess);
     if (linkSuccess == GL_FALSE) {
         GLint errorMessageLength;
-        // Get the length in chars of the link error message.
         glGetProgramiv(programObject, GL_INFO_LOG_LENGTH, &errorMessageLength);
 
-        // Retrieve the link error message.
-        GLchar errorMessage[errorMessageLength];
-        glGetProgramInfoLog(programObject, errorMessageLength, NULL, errorMessage);
+        std::vector<GLchar> errorMessage(errorMessageLength + 1);
+        glGetProgramInfoLog(programObject, errorMessageLength, nullptr, errorMessage.data());
+
+        // Convert errorMessage to a string
+        std::string errorString(errorMessage.begin(), errorMessage.end());
 
         stringstream strStream;
-        strStream << "Error Linking Shaders: " << errorMessage << endl;
+        strStream << "Error Linking Shaders: " << errorString << std::endl;
 
         throw ShaderException(strStream.str());
     }

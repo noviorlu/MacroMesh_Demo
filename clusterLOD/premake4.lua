@@ -1,137 +1,93 @@
--- Shared configurations
+-- Include directories
 includeDirList = {
     "../shared",
     "../shared/include",
     "../shared/gl3w",
     "../shared/imgui",
-    "../shared/glfw-3.3.8/include",
+    "C:/projects/vcpkg/installed/x64-windows/include" -- Add vcpkg include path
 }
 
-libDirectories = { 
-    "../lib",
-    "../shared/glfw-3.3.8/build/src",
+-- Library directories
+libDirectories = {
+    "C:/projects/vcpkg/installed/x64-windows-static/lib", -- vcpkg 静态库路径
+    "C:/projects/MacroMesh_Demo/lib" -- 其他库路径
 }
 
-if os.get() == "macosx" then
-    linkLibs = {
-        "cs488-framework",
-        "imgui",
-        "glfw3",
-        "lua"
-    }
-    linkOptionList = { "-framework IOKit", "-framework Cocoa", "-framework CoreVideo", "-framework OpenGL" }
-end
-
-if os.get() == "linux" then
-    linkLibs = {
-        "cs488-framework",
-        "imgui",
-        "glfw3",
-        "lua",
-        "GL",
-        "Xinerama",
-        "Xcursor",
-        "Xxf86vm",
-        "Xi",
-        "Xrandr",
-        "X11",
-        "stdc++",
-        "dl",
-        "pthread"
-    }
-    linkOptionList = {}
-end
-
-if os.get() == "windows" then
-    linkLibs = {
-        "cs488-framework",
-        "imgui",
-        "glfw3",
-        "opengl32",
-        "gdi32",
-        "user32",
-        "kernel32",
-        "shell32",
-        "Imm32",
-        "lua",
-        "metis",
-        "gklib",
-        "mingwex",
-        "msvcrt"
-    }
-    linkoptions { "-lmingwex", "-lmsvcrt" }
-    table.insert(includeDirList, "C:/projects/vcpkg/installed/x64-windows/include")
-    table.insert(includeDirList, "C:/projects/vcpkg/installed/x86-mingw-static/include")
-    table.insert(libDirectories, "C:/projects/vcpkg/installed/x64-windows/lib")
-    table.insert(libDirectories, "C:/projects/vcpkg/installed/x86-mingw-static/lib")
-    buildoptions { "-std=c++17" }
-    toolset "gcc"
-    linkOptionList = {}
-end
-
-buildOptions = {"-std=c++17"}
-
--- Handle custom build flags
-newoption {
-    trigger = "build-cluster",
-    description = "Build only the cluster project"
-}
-
-newoption {
-    trigger = "build-qemtest",
-    description = "Build only the QEMTest project"
+-- Libraries to link
+linkLibs = {
+    "cs488-framework", -- Project framework library
+    "imgui", -- ImGui library
+    "glfw3", -- GLFW library
+    "opengl32", -- OpenGL library
+    "gdi32", -- Windows Graphics Device Interface
+    "user32", -- Windows User Interface
+    "kernel32", -- Windows Kernel API
+    "shell32", -- Windows Shell API
+    "Imm32", -- Input Method Manager
+    "lua", -- Lua library
+    "tinyobjloader", -- TinyObjLoader library
+    "metis", -- METIS library
+    "gklib" -- GKlib for METIS
 }
 
 -- Solution definition
-solution "CS488-Projects"
+workspace "CS488-Projects"
     configurations { "Debug", "Release" }
+    platforms { "x64" } -- Target 64-bit architecture
+    location "vsproject" -- Visual Studio project files location
 
-    -- Cluster project
-    if not _OPTIONS["build-qemtest"] then
-        project "cluster"
-            kind "ConsoleApp"
-            language "C++"
-            cppdialect "C++17"
-            location "build/cluster"
-            objdir "build/cluster/obj"
-            targetdir "bin/cluster"
-            buildoptions (buildOptions)
-            libdirs (libDirectories)
-            links (linkLibs)
-            linkoptions (linkOptionList)
-            includedirs (includeDirList)
-            files { "*.cpp" }
+    filter "platforms:x64"
+        architecture "x64"
 
-            configuration "Debug"
-                defines { "DEBUG" }
-                flags { "Symbols" }
+-- Cluster project
+project "cluster"
+    kind "ConsoleApp"
+    language "C++"
+    cppdialect "C++17"
+    location "build/cluster"
+    objdir "build/cluster/obj"
+    targetdir "bin/cluster"
 
-            configuration "Release"
-                defines { "NDEBUG" }
-                flags { "Optimize" }
-    end
+    includedirs (includeDirList)
+    libdirs (libDirectories)
+    links (linkLibs)
 
-    -- QEMTest project
-    if not _OPTIONS["build-cluster"] then
-        project "QEMTest"
-            kind "ConsoleApp"
-            language "C++"
-            cppdialect "C++17"
-            location "build/QEMTest"
-            objdir "build/QEMTest/obj"
-            targetdir "bin/QEMTest"
-            buildoptions (buildOptions)
-            libdirs (libDirectories)
-            links (linkLibs)
-            linkoptions (linkOptionList)
-            includedirs (includeDirList)
-            files { "./QEMTest/QEMTest.cpp", "./HalfEdgeMesh.cpp", "./MeshProcessing.cpp", "./QEM.cpp", "./Mesh.cpp", "./Cluster.cpp" }
+    files { "*.cpp" }
 
-            configuration "Debug"
-                defines { "DEBUG" }
-                flags { "Symbols" }
+    filter "configurations:Debug"
+        defines { "DEBUG" }
+        symbols "On"
 
-            configuration "Release"
-                defines { "NDEBUG" }
-                flags { "Optimize" }
-    end
+    filter "configurations:Release"
+        defines { "NDEBUG" }
+        optimize "On"
+
+-- QEMTest project
+project "QEMTest"
+    kind "ConsoleApp"
+    language "C++"
+    cppdialect "C++17"
+    location "build/QEMTest"
+    objdir "build/QEMTest/obj"
+    targetdir "bin/QEMTest"
+
+    includedirs (includeDirList)
+    libdirs (libDirectories)
+    links (linkLibs)
+
+    files {
+        "./QEMTest/QEMTest.cpp",
+        "./HalfEdgeMesh.cpp",
+        "./MeshProcessing.cpp",
+        "./QEM.cpp",
+        "./Mesh.cpp",
+        "./Cluster.cpp"
+    }
+
+    filter "configurations:Debug"
+        defines { "DEBUG" }
+        symbols "On"
+
+    filter "configurations:Release"
+        defines { "NDEBUG" }
+        optimize "On"
