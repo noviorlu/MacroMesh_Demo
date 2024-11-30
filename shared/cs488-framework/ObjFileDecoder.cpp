@@ -166,10 +166,39 @@ void ObjFileDecoder::decode(
 }
 
 
+bool hasUVCoords(const char* objFilePath) {
+    std::ifstream in(objFilePath, std::ios::in);
+    if (!in) {
+        throw std::runtime_error("Unable to open .obj file: " + std::string(objFilePath));
+    }
 
+    std::string currentLine;
+    while (std::getline(in, currentLine)) {
+        if (currentLine.substr(0, 3) == "vt ") {
+            in.close();
+            return true; // Found a UV coordinate
+        }
+    }
 
+    in.close();
+    return false; // No UV coordinates found
+}
 
 void ObjFileDecoder::decode(
+    const char* objFilePath,
+    std::string& objectName,
+    std::vector<Vertex>& vertices,
+    std::vector<unsigned int>& indices
+) {
+    if (hasUVCoords(objFilePath)) {
+        decodeWithUV(objFilePath, objectName, vertices, indices);
+    } else {
+        decodeNoUV(objFilePath, objectName, vertices, indices);
+    }
+}
+
+
+void ObjFileDecoder::decodeWithUV(
     const char* objFilePath,
     std::string& objectName,
     std::vector<Vertex>& vertices,
@@ -262,6 +291,100 @@ void ObjFileDecoder::decode(
             indices.push_back(getOrAddVertexIndex(posIdx[0], uvIdx[0], normIdx[0], triangleArea));
             indices.push_back(getOrAddVertexIndex(posIdx[1], uvIdx[1], normIdx[1], triangleArea));
             indices.push_back(getOrAddVertexIndex(posIdx[2], uvIdx[2], normIdx[2], triangleArea));
+        }
+    }
+
+    in.close();
+
+    if (objectName.empty()) {
+        const char* baseName = strrchr(objFilePath, '/');
+        objectName = baseName ? baseName + 1 : objFilePath;
+        objectName = objectName.substr(0, objectName.find('.'));
+    }
+}
+
+void ObjFileDecoder::decodeNoUV(
+    const char* objFilePath,
+    std::string& objectName,
+    std::vector<Vertex>& vertices,
+    std::vector<unsigned int>& indices
+) {
+    vertices.clear();
+    indices.clear();
+
+    std::ifstream in(objFilePath, std::ios::in);
+    in.exceptions(std::ifstream::badbit);
+
+    if (!in) {
+        throw std::runtime_error("Unable to open .obj file: " + std::string(objFilePath));
+    }
+
+    std::string currentLine;
+    std::vector<glm::vec3> temp_positions;
+    std::vector<glm::vec3> temp_normals;
+
+    objectName.clear();
+
+    // Store unique vertices with accumulative data
+    std::unordered_map<Vertex, std::pair<unsigned int, float>> uniqueVertexMap;
+
+    auto getOrAddVertexIndex = [&](int posIdx, int normIdx, float weight) -> unsigned int {
+        glm::vec3 position = temp_positions[posIdx];
+        glm::vec3 normal = temp_normals[normIdx];
+        glm::vec2 uv = glm::vec2(0.0f, 0.0f); // Default UV value
+
+        Vertex vertex(position, normal, uv);
+        auto it = uniqueVertexMap.find(vertex);
+        if (it != uniqueVertexMap.end()) {
+            // Update the existing vertex with weighted attributes
+            unsigned int existingIndex = it->second.first;
+            float& accumulatedWeight = it->second.second;
+            float newWeight = accumulatedWeight + weight;
+
+            vertices[existingIndex].normal = (vertices[existingIndex].normal * accumulatedWeight + normal * weight) / newWeight;
+
+            accumulatedWeight = newWeight;
+            return existingIndex;
+        }
+
+        // If vertex is unique, add it to the vertex list and map
+        unsigned int newIndex = vertices.size();
+        vertices.push_back(vertex);
+        uniqueVertexMap[vertex] = {newIndex, weight};
+        return newIndex;
+    };
+
+    while (std::getline(in, currentLine)) {
+        if (currentLine.substr(0, 2) == "o ") {
+            objectName = currentLine.substr(2);
+        } else if (currentLine.substr(0, 2) == "v ") {
+            glm::vec3 position;
+            sscanf(currentLine.c_str(), "v %f %f %f", &position.x, &position.y, &position.z);
+            temp_positions.push_back(position);
+        } else if (currentLine.substr(0, 3) == "vn ") {
+            glm::vec3 normal;
+            sscanf(currentLine.c_str(), "vn %f %f %f", &normal.x, &normal.y, &normal.z);
+            temp_normals.push_back(normal);
+        } else if (currentLine.substr(0, 2) == "f ") {
+            int posIdx[3], normIdx[3];
+            sscanf(currentLine.c_str(),
+                   "f %d//%d %d//%d %d//%d",
+                   &posIdx[0], &normIdx[0],
+                   &posIdx[1], &normIdx[1],
+                   &posIdx[2], &normIdx[2]);
+
+            for (int i = 0; i < 3; i++) {
+                posIdx[i]--;
+                normIdx[i]--;
+            }
+
+            glm::vec3 edge1 = temp_positions[posIdx[1]] - temp_positions[posIdx[0]];
+            glm::vec3 edge2 = temp_positions[posIdx[2]] - temp_positions[posIdx[0]];
+            float triangleArea = glm::length(glm::cross(edge1, edge2)) * 0.5f;
+
+            indices.push_back(getOrAddVertexIndex(posIdx[0], normIdx[0], triangleArea));
+            indices.push_back(getOrAddVertexIndex(posIdx[1], normIdx[1], triangleArea));
+            indices.push_back(getOrAddVertexIndex(posIdx[2], normIdx[1], triangleArea));
         }
     }
 

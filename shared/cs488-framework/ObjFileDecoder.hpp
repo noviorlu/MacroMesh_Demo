@@ -53,6 +53,20 @@ public:
 			std::vector<unsigned int> & indices
     );
 
+	static void decodeWithUV(
+		const char* objFilePath,
+		std::string& objectName,
+		std::vector<Vertex>& vertices,
+		std::vector<unsigned int>& indices
+	);
+
+	static void decodeNoUV(
+		const char* objFilePath,
+		std::string& objectName,
+		std::vector<Vertex>& vertices,
+		std::vector<unsigned int>& indices
+	);
+
 };
 
 
