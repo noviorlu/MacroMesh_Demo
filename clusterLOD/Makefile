@@ -24,11 +24,11 @@ all: $(PROJECTS)
 cluster:
 ifneq (,$(cluster_config))
 	@echo "==== Building cluster ($(cluster_config)) ===="
-	@${MAKE} --no-print-directory -C build -f Makefile config=$(cluster_config)
+	@${MAKE} --no-print-directory -C build/cluster -f Makefile config=$(cluster_config)
 endif
 
 clean:
-	@${MAKE} --no-print-directory -C build -f Makefile clean
+	@${MAKE} --no-print-directory -C build/cluster -f Makefile clean
 
 help:
 	@echo "Usage: make [config=name] [target]"

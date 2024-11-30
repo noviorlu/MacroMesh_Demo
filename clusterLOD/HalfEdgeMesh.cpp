@@ -1,6 +1,7 @@
 #include "HalfEdgeMesh.hpp"
 
 #include <unordered_map>
+#include <iostream>
 
 HalfEdgeMesh::HalfEdgeMesh(const Mesh& mesh) {
     m_faces.reserve(mesh.m_indexData.size() / 3);
@@ -117,5 +118,101 @@ void HalfEdgeMesh::exportMesh(std::vector<Cluster>& clusters, std::vector<Cluste
         }
 
         clusterGroups.push_back(std::move(group));
+    }
+}
+
+void HalfEdgeMesh::HalfEdgeMeshValidation() {
+    for (size_t i = 0; i < m_vertices.size(); ++i) {
+        HalfVertex* vertex = m_vertices[i];
+        if (!vertex) {
+            std::cerr << "[ERROR] Vertex at index " << i << " is null." << std::endl;
+            continue;
+        }
+        if (!vertex->edge) {
+            std::cerr << "[ERROR] Vertex at index " << i << " has a null edge pointer." << std::endl;
+        } else if (vertex->edge->origin != vertex) {
+            std::cerr << "[ERROR] Vertex at index " << i 
+                      << " is not the origin of its associated edge." << std::endl;
+        }
+    }
+
+    for (size_t i = 0; i < m_edges.size(); ++i) {
+        HalfEdge* edge = m_edges[i];
+        if (!edge) {
+            std::cerr << "[ERROR] Edge at index " << i << " is null." << std::endl;
+            continue;
+        }
+        if (!edge->origin) {
+            std::cerr << "[ERROR] Edge at index " << i << " has a null origin vertex." << std::endl;
+        }
+        if (!edge->twin) {
+            std::cerr << "[ERROR] Edge at index " << i << " has no twin edge." << std::endl;
+        } else if (edge->twin->twin != edge) {
+            std::cerr << "[ERROR] Edge at index " << i 
+                      << " has a twin whose twin does not point back to this edge." << std::endl;
+        }
+        if (!edge->next) {
+            std::cerr << "[ERROR] Edge at index " << i << " has no next edge." << std::endl;
+        }
+        if (!edge->prev) {
+            std::cerr << "[ERROR] Edge at index " << i << " has no previous edge." << std::endl;
+        }
+    }
+
+    for (size_t i = 0; i < m_faces.size(); ++i) {
+        Face* face = m_faces[i];
+        if (!face) {
+            std::cerr << "[ERROR] Face at index " << i << " is null." << std::endl;
+            continue;
+        }
+        if (!face->edge) {
+            std::cerr << "[ERROR] Face at index " << i << " has no associated edge." << std::endl;
+        } else {
+            HalfEdge* startEdge = face->edge;
+            HalfEdge* currentEdge = startEdge;
+            size_t edgeCount = 0;
+
+            do {
+                if (!currentEdge) {
+                    std::cerr << "[ERROR] Null edge encountered in face at index " << i << "." << std::endl;
+                    break;
+                }
+                if (currentEdge->face != face) {
+                    std::cerr << "[ERROR] Edge in face at index " << i 
+                              << " does not point back to the correct face." << std::endl;
+                }
+                currentEdge = currentEdge->next;
+                edgeCount++;
+                if (edgeCount > m_edges.size()) {
+                    std::cerr << "[ERROR] Infinite loop detected in face at index " << i << "." << std::endl;
+                    break;
+                }
+            } while (currentEdge != startEdge);
+        }
+    }
+}
+
+void HalfEdgeMesh::HalfEdgeMeshPrint() {
+    std::cout << "Vertices:" << std::endl;
+    for (size_t i = 0; i < m_vertices.size(); ++i) {
+        HalfVertex* vertex = m_vertices[i];
+        std::cout << "Vertex " << i << ": position = (" 
+                  << vertex->position.x << ", " << vertex->position.y << ", " << vertex->position.z 
+                  << "), pointer = " << vertex << std::endl;
+    }
+
+    std::cout << "Edges:" << std::endl;
+    for (size_t i = 0; i < m_edges.size(); ++i) {
+        HalfEdge* edge = m_edges[i];
+        std::cout << "Edge " << i << ": origin position = (" 
+                  << edge->origin->position.x << ", " << edge->origin->position.y << ", " << edge->origin->position.z 
+                  << "), pointer = " << edge << ", twin = " << edge->twin 
+                  << ", next = " << edge->next << ", prev = " << edge->prev << std::endl;
+    }
+
+    std::cout << "Faces:" << std::endl;
+    for (size_t i = 0; i < m_faces.size(); ++i) {
+        Face* face = m_faces[i];
+        std::cout << "Face " << i << ": edge pointer = " << face->edge << std::endl;
     }
 }

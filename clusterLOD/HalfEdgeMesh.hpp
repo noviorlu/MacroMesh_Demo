@@ -15,16 +15,22 @@ struct HalfVertex : public Vertex {
     HalfEdge* edge;
     glm::mat4 quadric;
 
+    HalfVertex() : Vertex(), edge(nullptr), quadric(0.0f) {}
+
     HalfVertex(const glm::vec3& position, const glm::vec3& normal, const glm::vec2& uv) 
         : Vertex(position, normal, uv), edge(nullptr), quadric(0.0f) {}
 
     HalfVertex(const Vertex& vertex)
         : Vertex(vertex), edge(nullptr), quadric(0.0f) {}
+
+    void cleanAdjacentVerticesQuadric();
 };
 
 struct Face {
     HalfEdge* edge;
     Face(HalfEdge* edge) : edge(edge) {}
+
+    void updateFaceQuadric();
 };
 
 struct HalfEdge {
@@ -33,21 +39,41 @@ struct HalfEdge {
     HalfEdge* next;
     HalfEdge* prev;
     Face* face;
-};
 
-struct EdgeCost {
-    float cost;
-    glm::vec3 optimalPosition;
-    HalfEdge* edge;
+    struct Cost{
+        float val;
+        float lerpValue; 
+        float distanceToLine;
+        
+        bool operator<(const Cost& other) const {
+            return val < other.val;
+        }
+    };
+    Cost* cost;
 
-    bool operator<(const EdgeCost& other) const {
-        return cost < other.cost;
+    HalfEdge() {
+        origin = nullptr;
+        twin = nullptr;
+        next = nullptr;
+        prev = nullptr;
+        face = nullptr;
+        cost = nullptr;
     }
+    ~HalfEdge() {
+        if(cost != nullptr) {
+            delete cost;
+            cost = nullptr;
+            twin->cost = nullptr;
+        }
+        
+    }
+    void LerpVertex(Vertex& vert);
+    void computeEdgeCost(bool force);
 };
-typedef std::priority_queue<EdgeCost, std::vector<EdgeCost>, std::greater<EdgeCost>> QEMqueue;
 
 class HalfEdgeMesh {
 public:
+    HalfEdgeMesh(){}
     HalfEdgeMesh(const Mesh& mesh);
     ~HalfEdgeMesh();
     void exportMesh(std::vector<Cluster>& clusters, std::vector<ClusterGroup>& clusterGroups);
@@ -60,11 +86,9 @@ private:
 public:
     void partition_loop();
 
-// private:
-//     void computeInitialQuadrics();
-//     void computeEdgeCost(HalfEdge* edge, EdgeCost& edgeCost);
-//     void simplifyMesh();
-//     void mergeVertices(HalfVertex* v1, HalfVertex* v2, const glm::vec3& newPosition);
+private:
+    void initCostComputation();
+    void mergeEdge(HalfEdge* edge);
 
 private:
     void BuildAdjacencyListForRange(
@@ -81,4 +105,10 @@ private:
 
     std::vector<size_t> m_clusterOffsets;
     std::vector<size_t> m_clusterGroupOffsets;
+
+    void HalfEdgeMeshValidation();
+    void HalfEdgeMeshPrint();
+    friend void QEMTestcase();
+
+
 };
