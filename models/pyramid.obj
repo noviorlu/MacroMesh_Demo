@@ -1,0 +1,25 @@
+# Simple Tetrahedron with Normals and UVs (Fixed Face Order)
+
+# Vertex list
+v 0.0 0.0 0.0   # Vertex A
+v 1.0 0.0 0.0   # Vertex B
+v 0.0 1.0 0.0   # Vertex C
+v 0.5 0.5 1.0   # Vertex D
+
+# Texture coordinates (UVs)
+vt 0.0 0.0      # UV for Vertex A
+vt 1.0 0.0      # UV for Vertex B
+vt 0.0 1.0      # UV for Vertex C
+vt 0.5 0.5      # UV for Vertex D
+
+# Normals (one normal per face for simplicity)
+vn 0.0 0.0 -1.0   # Normal for base (ABC)
+vn -0.8944 0.4472 0.0   # Normal for side (ABD)
+vn 0.4472 -0.8944 0.0   # Normal for side (ACD)
+vn 0.4472 0.4472 0.7746 # Normal for side (BCD)
+
+# Faces (vertex/texture/normal)
+f 1/1/1 2/2/1 3/3/1      # Base triangle (ABC)
+f 1/1/2 4/4/2 2/2/2      # Side triangle (ABD)
+f 1/1/3 3/3/3 4/4/3     # Side triangle (ACD)
+f 2/2/4 4/4/4 3/3/4      # Side triangle (BCD)

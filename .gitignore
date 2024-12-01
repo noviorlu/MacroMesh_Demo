@@ -43,3 +43,5 @@ proposal/*
 !proposal/proposal.pdf
 !proposal/proposal.tex
 !proposal/refereneces.bib
+/clusterLOD/vsproject/.vs/CS488-Projects
+/clusterLOD/log.txt
