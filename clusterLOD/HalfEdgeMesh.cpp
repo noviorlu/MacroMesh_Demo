@@ -354,7 +354,6 @@ void HalfEdgeMesh::exportMesh(const std::string& objFilePath) {
     objFile.close();
 }
 
-
 void HalfEdgeMesh::HalfEdgeMeshValidation() {
     std::vector<std::string> errorMessages;
 
@@ -558,3 +557,215 @@ void HalfEdgeMesh::HalfEdgeMeshPrint() {
         std::cout << std::endl;
     }
 }
+
+
+
+
+
+
+
+
+
+
+void EMesh::importEMesh(const std::string& objFilePath) {
+    std::string objectName;
+    std::vector<glm::vec3> positions;
+    std::vector<glm::vec3> normals;
+    std::vector<glm::vec2> uvCoords;
+
+    ObjFileDecoder::decode(objFilePath.c_str(), objectName, positions, normals, uvCoords);
+
+    std::unordered_map<glm::vec3, EVertex*> vertexMap;
+
+    auto getOrCreateVertex = [&](const glm::vec3& pos, const glm::vec3& norm, const glm::vec2& uv) -> EVertex* {
+        if (vertexMap.find(pos) == vertexMap.end()) {
+			EVertex* vertex = new EVertex(pos, norm, uv);
+            m_vertices.emplace_back(vertex);
+            vertexMap[pos] = vertex;
+        }
+        return vertexMap[pos];
+    };
+    auto createEdge = [&](EVertex* v1, EVertex* v2, EFace* face) {
+        VertexPair pair(v1, v2);
+		EEdge* edge = nullptr;
+        if (m_edges.find(pair) == m_edges.end()) {
+			edge = new EEdge(pair, face);
+            m_edges.emplace(pair, edge);
+            v1->addEdge(edge);
+            v2->addEdge(edge);
+		}
+		else {
+			edge = m_edges[pair];
+
+			edge->addFace(face);
+		}
+    };
+
+    if (uvCoords.size() > 0) {
+        for (size_t i = 0; i < positions.size(); i += 3) {
+            EVertex* v0 = getOrCreateVertex(positions[i], normals[i], uvCoords[i]);
+            EVertex* v1 = getOrCreateVertex(positions[i + 1], normals[i + 1], uvCoords[i + 1]);
+            EVertex* v2 = getOrCreateVertex(positions[i + 2], normals[i + 2], uvCoords[i + 2]);
+
+            EFace* face = new EFace(v0, v1, v2);
+            m_faces.push_back(face);
+
+            createEdge(v0, v1, face);
+            createEdge(v1, v2, face);
+            createEdge(v2, v0, face);
+        }
+    }
+    else {
+        for (size_t i = 0; i < positions.size(); i += 3) {
+            EVertex* v0 = getOrCreateVertex(positions[i], normals[i], glm::vec2(0));
+            EVertex* v1 = getOrCreateVertex(positions[i + 1], normals[i + 1], glm::vec2(0));
+            EVertex* v2 = getOrCreateVertex(positions[i + 2], normals[i + 2], glm::vec2(0));
+            
+            EFace* face = new EFace(v0, v1, v2);
+            m_faces.push_back(face);
+
+            createEdge(v0, v1, face);
+            createEdge(v1, v2, face);
+            createEdge(v2, v0, face);
+        }
+    }
+
+    for(auto& [pair, edge] : m_edges) {
+        if(edge->faces.size() == 1) {
+            edge->isBoundary = true;
+        }
+    }
+
+    // print();
+    validate();
+}
+
+void EMesh::exportEMesh(const std::string& objFilePath) {
+    std::ofstream outFile(objFilePath);
+    if (!outFile.is_open()) {
+        std::cerr << "Failed to open file for writing: " << objFilePath << std::endl;
+        return;
+    }
+
+	std::unordered_map<EVertex*, int> vertexIndexMap;
+    int counter = 1;
+    for (EVertex* vertex : m_vertices) {
+        if (vertex->edges.size() == 0) continue;
+        vertexIndexMap[vertex] = counter;
+        counter++;
+        outFile << "v " << vertex->position.x << " " << vertex->position.y << " " << vertex->position.z << "\n";
+    }
+
+    for (EVertex* vertex : m_vertices) {
+        if (vertex->edges.size() == 0) continue;
+        outFile << "vn " << vertex->normal.x << " " << vertex->normal.y << " " << vertex->normal.z << "\n";
+    }
+
+    for (EVertex* vertex : m_vertices) {
+        if (vertex->edges.size() == 0) continue;
+        outFile << "vt " << vertex->uv.x << " " << vertex->uv.y << "\n";
+    }
+
+    for (const auto& face : m_faces) {
+        if (!face->isValid) continue;
+
+        outFile << "f ";
+        for (int i = 0; i < 3; ++i) {
+            auto vertex = face->vertices[i];
+            int vertexIndex = vertexIndexMap[vertex];
+            outFile << vertexIndex << "/" << vertexIndex << "/" << vertexIndex << " ";
+        }
+        outFile << "\n";
+    }
+
+    outFile.close();
+}
+
+void EMesh::validate(){
+    // face should not have empty vertices
+    for (auto& face : m_faces) {
+        if (face->isValid == false) continue;
+        if (face->vertices[0] == nullptr || face->vertices[1] == nullptr || face->vertices[2] == nullptr) {
+            std::cerr << "[ERROR] Face has empty vertices." << std::endl;
+            assert(false);
+        }
+
+        // validate if face's edge contains face
+        for (int i = 0; i < 3; ++i) {
+            EVertex* v1 = face->vertices[i];
+            EVertex* v2 = face->vertices[(i + 1) % 3];
+            VertexPair pair(v1, v2);
+			if (m_edges.find(pair) == m_edges.end()) {
+				std::cerr << "[ERROR] Face has an edge that is not in the edge list." << std::endl;
+				assert(false);
+			}
+
+            if(!m_edges[pair]->containFace(face)) {
+                std::cerr << "[<ERROR>] Face has an edge that does not contain the face. " << face << std::endl;
+                assert(false);
+            }
+        }
+    }
+
+    // edge should not have empty vertices
+    for (auto& [pair, edge] : m_edges) {
+        if (edge->isValid == false) continue;
+        if (edge->vertices.v1 == nullptr || edge->vertices.v2 == nullptr) {
+            std::cerr << "[ERROR] Edge has empty vertices." << std::endl;
+            assert(false);
+        }
+
+        for (auto& face : edge->faces) {
+            if (face == nullptr) {
+                std::cerr << "[ERROR] Edge has empty face." << std::endl;
+                assert(false);
+            }
+
+            // check if face in m_faces
+            if (std::find(m_faces.begin(), m_faces.end(), face) == m_faces.end()) {
+                std::cerr << "[ERROR] Edge has a face that is not in the face list." << std::endl;
+                assert(false);
+            }
+            
+
+            if(face->vertices[0] == nullptr || face->vertices[1] == nullptr || face->vertices[2] == nullptr) {
+                std::cerr << "[ERROR] Face has empty vertices." << std::endl;
+                assert(false);
+            }
+        }
+    }
+}
+
+void EMesh::print() {
+    std::cout << "Vertices:" << std::endl;
+    for (const auto& vertex : m_vertices) {
+        std::cout << "Vertex " << vertex << ": ";
+        for (const auto& edge : vertex->edges) {
+            std::cout << edge << " ";
+        }
+        std::cout << std::endl;
+    }
+
+    std::cout << "Edges:" << std::endl;
+    for (const auto& [pair, edge] : m_edges) {
+        if (edge->isValid == false) continue;
+        std::cout << "Edge " << edge << ": (" << pair.v1 << ", " << pair.v2 << ") Faces: ";
+        for (const auto& face : edge->faces) {
+            std::cout << face << " ";
+        }
+        std::cout << std::endl;
+    }
+
+    std::cout << "Faces:" << std::endl;
+    for (const auto& face : m_faces) {
+        if (face->isValid == false) continue;
+        std::cout << "Face " << face << ": ";
+        std::cout << m_edges[VertexPair(face->vertices[0], face->vertices[1])] << " ";
+        std::cout << m_edges[VertexPair(face->vertices[1], face->vertices[2])] << " ";
+        std::cout << m_edges[VertexPair(face->vertices[2], face->vertices[0])] << " ";
+        std::cout << std::endl;
+    }
+}
+
+
+

@@ -84,12 +84,18 @@ void clusterLOD::init()
  //       }
  //   );
 
-	HalfEdgeMesh* halfEdgeMesh = new HalfEdgeMesh(ModelFilePath + "sphere.obj");
+	//HalfEdgeMesh* halfEdgeMesh = new HalfEdgeMesh(ModelFilePath + "suzanne.obj");
 	// halfEdgeMesh->partition_loop();
 	// halfEdgeMesh->exportMesh(m_meshConsolidator->m_clusterList, m_meshConsolidator->m_clusterGroupList);
-	 halfEdgeMesh->QEM();
-	halfEdgeMesh->exportMesh(((ModelFilePath + "sphere_QEM.obj").c_str()));
+	 //halfEdgeMesh->QEM();
+	//halfEdgeMesh->exportMesh(((ModelFilePath + "suzanne_QEM.obj").c_str()));
 	// halfEdgeMesh->exportMesh(*m_meshConsolidator);
+
+	EMesh eMesh;
+	eMesh.importEMesh(ModelFilePath + "suzanne.obj");
+	eMesh.QEM(0.5);
+	eMesh.exportEMesh(ModelFilePath + "suzanne_E.obj");
+
 	exit(0);
 	
 	

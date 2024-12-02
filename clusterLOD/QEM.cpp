@@ -123,6 +123,8 @@ void HalfEdgeMesh::edgeCollapse(HalfEdge* edge) {
         // special case: Face back-to-back
         std::cout << "[SPECIAL CASE]: Face back-to-back:(" << edge->face << ")(" << edge->twin->face << ")" << std::endl;
 
+        v2->position = (v1->position + v2->position) / 2.0f;
+
         HalfVertex* v3 = edge->prev->origin;
         if (v3->edge == edge->prev || v3->edge == edge->twin->prev) {
             std::cout << "TRIGGER SET V3 EDGE" << std::endl;
@@ -294,6 +296,139 @@ void HalfEdgeMesh::QEM(){
         edgeCollapse(queue.top());
 
 		validFaces = 0;
+        for (auto& face : m_faces) {
+            if (face->isValid) validFaces++;
+        }
+    }
+}
+
+
+
+void EMesh::edgeCollapse(EEdge* edge){
+    // merging v2 into v1 of edge
+    EVertex* v1 = edge->vertices.v1;
+    EVertex* v2 = edge->vertices.v2;
+
+
+    v1->position = edge->cost.optimalPosition;
+
+    // remove faces from the adjacent vertices
+    while(edge->faces.size() != 0){
+        EFace* face = *edge->faces.begin();
+
+        VertexPair pair1(face->vertices[0], face->vertices[1]);
+        VertexPair pair2(face->vertices[1], face->vertices[2]);
+        VertexPair pair3(face->vertices[2], face->vertices[0]);
+
+        // find the edges from m_edges
+        EEdge* edge1 = m_edges[pair1];
+        EEdge* edge2 = m_edges[pair2];
+        EEdge* edge3 = m_edges[pair3];
+
+        edge1->removeFace(face);
+        edge2->removeFace(face);
+        edge3->removeFace(face);
+
+        face->isValid = false;
+    }
+    edge->isValid = false;
+
+    // set all edges of v2 to v1
+    while(v2->edges.size() != 0){
+        EEdge* adjEdge = v2->popEdge();
+
+        EVertex* v = adjEdge->vertices.v1 == v2 ? adjEdge->vertices.v2 : adjEdge->vertices.v1;
+        if(v == v1) continue;
+
+        m_edges.erase(adjEdge->vertices);
+        VertexPair pair(v1, v);
+
+        // update the faces of the adjacent edge
+        for(auto& face : adjEdge->faces){
+            for(int i = 0; i < 3; ++i){
+                if(face->vertices[i] == v2){
+                    face->vertices[i] = v1;
+                }
+            }
+        }
+        if (m_edges.find(pair) != m_edges.end()) { // if exist, merge the duplicate edges by copying faces to the existing edge
+            while(EFace* popface = adjEdge->popFace()){
+                m_edges[pair]->addFace(popface);
+            }
+            adjEdge->isValid = false;
+        }
+        else{
+            m_edges[pair] = adjEdge;
+            adjEdge->vertices = pair;
+            v1->addEdge(adjEdge);
+        }
+    }
+
+}
+
+void EMesh::QEMHelper() {
+
+    for(EVertex* vertex : m_vertices){
+        vertex->quadric = glm::mat4(0.0f);
+    }
+
+    // calculate quadric for each vertex by loop through faces
+    for (EFace* face : m_faces) {
+        if (!face->isValid) continue;
+        glm::mat4 Q = glm::mat4(0.0f);
+        glm::vec3 normal = glm::cross(face->vertices[1]->position - face->vertices[0]->position, face->vertices[2]->position - face->vertices[0]->position);
+        normal = glm::normalize(normal);
+        float d = -glm::dot(normal, face->vertices[0]->position);
+        glm::vec4 plane(normal, d);
+        Q = glm::outerProduct(plane, plane);
+        for (int i = 0; i < 3; ++i) {
+            face->vertices[i]->quadric += Q;
+        }
+    }
+
+    // calculate edge cost
+    for (auto& [pair, edge] : m_edges) {
+        if (!edge->isValid) continue;
+        EVertex* v1 = edge->vertices.v1;
+        EVertex* v2 = edge->vertices.v2;
+
+        if(edge->isBoundary){   
+            edge->cost = Cost{ std::numeric_limits<float>::max(), glm::vec3(0.0f) };
+            continue;
+        }
+
+        glm::mat4 Q = v1->quadric + v2->quadric;
+
+        glm::mat4 Q_sub = Q;
+        Q_sub[3] = glm::vec4(0, 0, 0, 1);
+
+        glm::vec3 optimalPosition = (v1->position + v2->position) / 2.0f;
+
+        glm::vec4 v_opt(optimalPosition, 1.0f);
+        float costValue = glm::dot(v_opt, Q * v_opt);
+
+        costValue = glm::max(costValue, 0.0f);
+        edge->cost = Cost{ costValue, optimalPosition };
+    }
+
+    // create the priority queue and collapse the edges
+    EEdgePriorityQueue pq;
+    for (auto& [pair, edge] : m_edges) {
+        pq.push(edge);
+    }
+
+    EEdge* edge = pq.pop();
+    assert(edge != nullptr);
+
+    edgeCollapse(edge);
+}
+
+void EMesh::QEM(float ratio){
+    int validFaces = m_faces.size();
+    int targetFaces = validFaces * ratio;
+    while (validFaces > targetFaces) {
+        QEMHelper();
+        validFaces = 0;
         for (auto& face : m_faces) {
             if (face->isValid) validFaces++;
         }

@@ -12,6 +12,14 @@
 struct HalfVertex;
 struct HalfEdge;
 struct Face;
+struct Cost {
+    float val;
+    glm::vec3 optimalPosition;
+
+    bool operator<(const Cost& other) const {
+        return val < other.val;
+    }
+};
 
 struct HalfVertex : public Vertex {
     bool isValid = true;
@@ -31,7 +39,6 @@ struct HalfVertex : public Vertex {
 
     std::vector<HalfVertex*> getAdjacentVertices();
 };
-
 struct HalfEdge {
 	bool isValid = true;
 
@@ -40,15 +47,6 @@ struct HalfEdge {
     HalfEdge* next = nullptr;
     HalfEdge* prev = nullptr;
     Face* face = nullptr;
-
-    struct Cost{
-        float val;
-		glm::vec3 optimalPosition;
-        
-        bool operator<(const Cost& other) const {
-            return val < other.val;
-        }
-    };
     Cost cost;
 
     HalfEdge() {
@@ -63,7 +61,6 @@ struct HalfEdge {
     void computeEdgeCost(bool force);
 };
 
-// Define the hash function
 struct HashHalfEdge {
     size_t operator()(const HalfEdge* edge) const {
         if (edge == nullptr || edge->origin == nullptr || edge->twin == nullptr || edge->twin->origin == nullptr) {
@@ -77,8 +74,6 @@ struct HashHalfEdge {
         return h1 ^ (h2 * 31);
     }
 };
-
-// Define the equality function for unordered_set
 struct EqualHalfEdge {
     bool operator()(const HalfEdge* a, const HalfEdge* b) const {
         if (a == nullptr || b == nullptr) return false;
@@ -117,7 +112,6 @@ struct Face {
         return os;
     }
 };
-
 
 class HalfEdgeMesh {
 public:
@@ -167,9 +161,7 @@ private:
     friend void QEMTestcase1();
 };
 
-
 using TripleHalfVertex = std::array<HalfVertex*, 3>;
-
 struct TripleHalfVertexHash {
     size_t operator()(const TripleHalfVertex& vertices) const {
         TripleHalfVertex sortedVertices = vertices;
@@ -192,3 +184,138 @@ struct TripleHalfVertexEqual {
         return sortedLhs == sortedRhs;
     }
 };
+
+
+
+struct EVertex;
+struct EEdge;
+struct EFace;
+struct VertexPair {
+    EVertex* v1;
+    EVertex* v2;
+    VertexPair(const VertexPair& other) : v1(other.v1), v2(other.v2) {}
+    VertexPair(EVertex* vertex1, EVertex* vertex2) {
+		assert(vertex1 != nullptr && vertex2 != nullptr);
+		assert(vertex1 != vertex2);
+        if (vertex1 < vertex2) {
+            v1 = vertex1;
+            v2 = vertex2;
+        }
+        else {
+            v1 = vertex2;
+            v2 = vertex1;
+        }
+    }
+    bool operator==(const VertexPair& other) const {
+        return v1 == other.v1 && v2 == other.v2;
+    }
+
+    // assign operator
+	VertexPair& operator=(const VertexPair& other) {
+		v1 = other.v1;
+		v2 = other.v2;
+		return *this;
+	}
+};
+
+struct EVertex : public Vertex {
+    glm::mat4 quadric;
+    std::unordered_set<EEdge*> edges;
+    void addEdge(EEdge* edge) {edges.insert(edge);}
+    void removeEdge(EEdge* edge) {edges.erase(edge);}
+    EEdge* popEdge() {
+        if (edges.empty()) return nullptr;
+        EEdge* edge = *edges.begin();
+        edges.erase(edges.begin());
+        return edge;
+    }
+	EVertex(glm::vec3 position, glm::vec3 normal, glm::vec2 uv) : Vertex(position, normal, uv) {
+        edges.clear();
+    }
+};
+
+struct EEdge {
+    bool isDirty = false; // for piority Queue Lazy deletion & reinsert
+	bool isValid = true;
+    bool isBoundary = false;
+	VertexPair vertices;
+	std::unordered_set<EFace*> faces; // should be size of 2, might have cases where Face back to back thus Face size of 4
+    
+    Cost cost;
+    void addFace(EFace* face) { faces.insert(face); }
+    bool containFace(EFace* face) { return faces.find(face) != faces.end(); }
+    void removeFace(EFace* face) { faces.erase(face); }
+    EFace* popFace() {
+        if (faces.empty()) return nullptr;
+        EFace* face = *faces.begin();
+        faces.erase(faces.begin());
+        return face;
+    }
+    EEdge(const VertexPair& pair, EFace* face) : vertices(pair) {
+        faces.clear();
+        addFace(face);
+		cost.val = 0.0f;
+		cost.optimalPosition = glm::vec3(0.0f);
+    }
+    void computeEdgeCost();
+
+};
+
+struct EFace {
+    bool isValid = true;
+    std::array<EVertex*, 3> vertices; // should be size of 3
+	EFace(EVertex* v0, EVertex* v1, EVertex* v2) {
+		vertices[0] = v0;
+		vertices[1] = v1;
+		vertices[2] = v2;
+	}
+};
+
+class EMesh {
+public:
+	std::vector<EVertex*> m_vertices;
+	std::vector<EFace*> m_faces;
+    struct VertexPairHash {
+        std::size_t operator()(const VertexPair& pair) const {
+            std::size_t h1 = std::hash<const EVertex*>()(pair.v1);
+            std::size_t h2 = std::hash<const EVertex*>()(pair.v2);
+            return h1 ^ (h2 << 1);
+        }
+    };
+	std::unordered_map<VertexPair, EEdge*, VertexPairHash> m_edges;
+
+	void importEMesh(const std::string& objFilePath);
+	void exportEMesh(const std::string& objFilePath);
+    void QEM(float ratio);
+    void QEMHelper();
+    void edgeCollapse(EEdge* edge);
+    void validate();
+    void print();
+};
+
+class EEdgePriorityQueue {
+    struct EEdgeCompare {
+        bool operator()(const EEdge* lhs, const EEdge* rhs) const {
+            return lhs->cost.val > rhs->cost.val;
+        }
+    };
+    std::priority_queue<EEdge*, std::vector<EEdge*>, EEdgeCompare> pq;
+public:
+    void push(EEdge* edge) { pq.push(edge); }
+    EEdge* pop() {
+        while (!pq.empty()) {
+            EEdge* topEdge = pq.top();
+            pq.pop();
+            if (!topEdge->isValid) continue;
+            if (topEdge->isDirty) {
+                topEdge->isDirty = false;
+                push(topEdge);
+                continue;
+            }
+            return topEdge;
+        }
+        return nullptr;
+    }
+    bool empty() const { return pq.empty(); }
+};
+
