@@ -1,9 +1,10 @@
-
+﻿
 #include "HalfEdgeMesh.hpp"
 
 #include <unordered_set>
 #include <iostream>
 #include <algorithm>
+#include <iterator>
 
 #include <glm/gtx/string_cast.hpp>
 
@@ -28,127 +29,65 @@ std::vector<HalfVertex*> HalfVertex::getAdjacentVertices(){
 }
 
 /// @brief before using this function, make sure the vertices quadric is initialized to 0
-void Face::updateFaceQuadric(){
-    HalfEdge* edge = this->edge;
-    HalfEdge* startEdge = edge;
-    glm::vec3 v0 = startEdge->origin->position;
-    glm::vec3 v1 = startEdge->next->origin->position;
-    glm::vec3 v2 = startEdge->next->next->origin->position;
+void Face::updateFaceQuadric() {
+    if (!edge) return;
+
+    glm::vec3 v0 = edge->origin->position;
+    glm::vec3 v1 = edge->next->origin->position;
+    glm::vec3 v2 = edge->next->next->origin->position;
 
     glm::vec3 normal = glm::cross(v1 - v0, v2 - v0);
     float area = glm::length(normal);
 
-    // Ignore faces with zero area
-    if (area < 1e-6f) {
-        return;
-    }
+    if (area < 1e-6f) return;
 
     normal = glm::normalize(normal);
 
-    // Compute the plane equation(ax + by + cz + d = 0)
     float d = -glm::dot(normal, v0);
     glm::vec4 plane(normal, d);
 
-    // Compute the quadric matrix from the plane equation
     glm::mat4 quadric = glm::outerProduct(plane, plane);
 
+    HalfEdge* currentEdge = edge;
     do {
-        edge->origin->quadric += quadric;
-        edge = edge->next;
-    } while (edge != startEdge);
+        if (currentEdge && currentEdge->origin) {
+            currentEdge->origin->quadric += quadric;
+        }
+        currentEdge = currentEdge->next;
+    } while (currentEdge != edge);
 }
 
 void HalfEdge::computeEdgeCost(bool force = false) {
-    // Assert origin and twin are not null
-    assert(origin && "Origin vertex is null.");
-    assert(twin && "Twin edge is null.");
-    assert(twin->origin && "Twin's origin vertex is null.");
-
-    if (!force && cost != nullptr) {
-        return;
-    }
-
-    if (force && this > twin) {
-        return;
-    }
-
-    if (cost != nullptr) {
-        delete cost;
-        cost = nullptr;
-        twin->cost = nullptr;
-    }
-
     HalfVertex* v1 = origin;
     HalfVertex* v2 = twin->origin;
 
     glm::mat4 Q = v1->quadric + v2->quadric;
+
     glm::mat4 Q_sub = Q;
     Q_sub[3] = glm::vec4(0, 0, 0, 1);
 
-    float lerpValue;
-    float distanceToLine;
-
-    glm::vec3 optimalPosition;
-    if (glm::determinant(Q_sub) != 0.0f) {
-        glm::vec4 v_optimal = glm::inverse(Q_sub) * glm::vec4(0, 0, 0, 1);
-
-        // Debugging optimal position
-        optimalPosition = glm::vec3(v_optimal);
-
-        glm::vec3 v1ToV2 = v2->position - v1->position;
-        float lengthSquared = glm::dot(v1ToV2, v1ToV2);
-
-        if (lengthSquared > 0.0f) {
-            lerpValue = glm::dot(optimalPosition - v1->position, v1ToV2) / lengthSquared;
-        } else {
-            lerpValue = 0.5f;
-        }
-        lerpValue = glm::clamp(lerpValue, 0.0f, 1.0f);
-
-        glm::vec3 v1ToOptimal = optimalPosition - v1->position;
-        distanceToLine = glm::length(glm::cross(v1ToV2, v1ToOptimal)) / glm::length(v1ToV2);
-    } else {
-        optimalPosition = (v1->position + v2->position) / 2.0f;
-        lerpValue = 0.5f;
-        distanceToLine = 0.0f;
-    }
+    glm::vec3 optimalPosition = (v1->position + v2->position) / 2.0f;
 
     glm::vec4 v_opt(optimalPosition, 1.0f);
     float costValue = glm::dot(v_opt, Q * v_opt);
 
-    // Ensure costValue is non-negative
     costValue = glm::max(costValue, 0.0f);
 
-    // Debugging final cost value
-    this->cost = new Cost{costValue, lerpValue, distanceToLine};
-    this->twin->cost = this->cost;
-
-    // Assert cost is successfully set
-    assert(this->cost != nullptr && "[QEM:ERROR] Cost allocation failed.");
-    assert(this->twin->cost == this->cost && "[QEM:ERROR] Twin's cost should match current edge's cost.");
+	this->cost = Cost{ costValue, optimalPosition };
 }
 
-
 void HalfEdge::LerpVertex(Vertex& vert) {
-    if (cost == nullptr) {
-        assert(cost != nullptr && "[QEM:ERROR] Cost is not computed for this edge");
-    }
     HalfVertex& v1 = *this->origin;
+    assert(this->twin != nullptr && "[QEM:ERROR] Twin edge is null.");
+    assert(this->twin->origin != nullptr && "[QEM:ERROR] Twin's origin vertex is null.");
     HalfVertex& v2 = *this->twin->origin;
 
-    glm::vec3 v1ToV2 = v2.position - v1.position;
-    glm::vec3 v1ToOptimal = glm::normalize(glm::cross(v1ToV2, glm::vec3(0, 1, 0)));
-    if (glm::length(v1ToOptimal) < 1e-6f) {
-        v1ToOptimal = glm::normalize(glm::cross(v1ToV2, glm::vec3(1, 0, 0)));
-    }
+    vert.position = cost.optimalPosition;
 
-    glm::vec3 lerpedPosition = glm::mix(v1.position, v2.position, cost->lerpValue);
-    vert.position = lerpedPosition + cost->distanceToLine * v1ToOptimal;
+    glm::vec3 lerpedNormal = glm::normalize(glm::mix(v1.normal, v2.normal, 0.5f));
+    vert.normal = glm::normalize(lerpedNormal);
 
-    glm::vec3 lerpedNormal = glm::normalize(glm::mix(v1.normal, v2.normal, cost->lerpValue));
-    vert.normal = glm::normalize(lerpedNormal + cost->distanceToLine * glm::normalize(v1ToOptimal));
-
-    vert.uv = glm::mix(v1.uv, v2.uv, cost->lerpValue);
+    vert.uv = glm::mix(v1.uv, v2.uv, 0.5f);
 }
 
 /// @brief Compute the initial quadrics for each vertex in the mesh.
@@ -166,52 +105,156 @@ void HalfEdgeMesh::initCostComputation() {
     }
 }
 
-HalfVertex* HalfEdgeMesh::mergeEdge(HalfEdge* edge) {
-    // 1. remove v2 and set v1 to the new vertex
+void HalfEdgeMesh::edgeCollapse(HalfEdge* edge) {
+    assert(edge->isValid);
+    HalfEdge*start, *cur;
+	int counter = 0;
+
     HalfVertex* v1 = edge->origin;
-    edge->LerpVertex(*v1);
-    assert(edge->twin != nullptr && "[QEM:ERROR] Twin edge is null.");
-    HalfVertex* v2 = edge->twin->origin;
+	HalfVertex* v2 = edge->twin->origin;
 
-    m_vertices.erase(std::remove(m_vertices.begin(), m_vertices.end(), v2), m_vertices.end());
+    if (!v1->edge->isValid || !v2->edge->isValid) {
+        edge->isValid = false;
+        edge->twin->isValid = false;
+        return;
+    }
 
-    auto processFace = [&](Face* face) {
-        HalfEdge* innerEdge = nullptr;
+    if (edge->twin->next == edge->prev->twin) {
+        // special case: Face back-to-back
+        std::cout << "[SPECIAL CASE]: Face back-to-back:(" << edge->face << ")(" << edge->twin->face << ")" << std::endl;
 
-        HalfEdge* startEdge = face->edge;
-        HalfEdge* currentEdge = startEdge;
-
-        std::vector<HalfEdge*> innerEdges;
-
-        do {
-            if (currentEdge->origin != v1 && currentEdge->origin != v2) {
-                innerEdge = currentEdge;
-            }
-            innerEdges.push_back(currentEdge);
-            m_edges.erase(std::remove(m_edges.begin(), m_edges.end(), currentEdge), m_edges.end());
-            currentEdge = currentEdge->next;
-        } while (currentEdge != startEdge);
-
-        HalfEdge* innerEdges_twin = innerEdge->twin;
-        HalfEdge* prevEdge_twin = innerEdge->prev->twin;
-
-        innerEdges_twin->twin = prevEdge_twin;
-        prevEdge_twin->twin = innerEdges_twin;
-
-        m_faces.erase(std::remove(m_faces.begin(), m_faces.end(), face), m_faces.end());
-        delete face;
-
-        for (auto edge : innerEdges) {
-            delete edge;
+        HalfVertex* v3 = edge->prev->origin;
+        if (v3->edge == edge->prev || v3->edge == edge->twin->prev) {
+            std::cout << "TRIGGER SET V3 EDGE" << std::endl;
+            v3->edge = edge->next->twin;
         }
-    };
-    // Process faces and retrieve updated twin edges
-    if(edge->face != nullptr) processFace(edge->face);
-    if(edge->twin->face != nullptr) processFace(edge->twin->face);
 
-    delete v2;
+        edge->next->twin->twin = edge->twin->prev->twin;
+        edge->twin->prev->twin->twin = edge->next->twin;
 
-    return v1;
+		edge->isValid = false;
+		edge->next->isValid = false;
+		edge->prev->isValid = false;
+
+		edge->twin->isValid = false;
+		edge->twin->next->isValid = false;
+		edge->twin->prev->isValid = false;
+
+        edge->face->isValid = false;
+        edge->twin->face->isValid = false;
+
+        v1->isValid = false;
+        if (v2->edge == edge->twin) {
+            std::cout << "TRIGGER SET V2 EDGE" << std::endl;
+            v2->edge = edge->twin->prev->twin;
+        }
+        //assert(v2->edge->isValid);
+        //assert(v3->edge->isValid);
+
+        //HalfEdgeMeshValidation();
+        return;
+    }
+
+    cur = start = v2->edge; counter = 0;
+    do {
+        cur = cur->twin->next;
+        if (counter++ > 1000) {
+            // huge vertex loop no merge
+            edge->isValid = false;
+            edge->twin->isValid = false;
+            return;
+        }
+    } while (cur != start);
+
+    cur = start = v2->edge; counter = 0;
+    do {
+        if (cur->isValid) cur->origin = v1;
+        cur = cur->twin->next;
+    } while (cur != start);
+
+    v1->position = (v1->position + v2->position) / 2.0f;
+
+    if (v1->edge == edge || v1->edge == edge->twin->next) {
+        std::cout << "TRIGGER SET V1 EDGE" << std::endl;
+        v1->edge = edge->prev->twin;
+        if (edge->prev->twin == edge->twin) {
+            std::cout << "Detect Special Case:" << std::endl;
+			std::cout << *(edge->face) << *(edge->twin->face) << std::endl;
+			assert(false);
+        }
+    }
+
+	HalfVertex* v1adj = edge->prev->origin;
+	HalfVertex* v2adj = edge->twin->prev->origin;
+
+    if (v1adj->edge == edge->prev) {
+        std::cout << "TRIGGER SET V1ADJ EDGE" << std::endl;
+        v1adj->edge = edge->next->twin;
+    }
+    if (v2adj->edge == edge->twin->prev) {
+        std::cout << "TRIGGER SET V2ADJ EDGE" << std::endl;
+        v2adj->edge = edge->twin->next->twin;
+    }
+
+    edge->next->twin->twin = edge->prev->twin;
+    edge->prev->twin->twin = edge->next->twin;
+
+    edge->twin->next->twin->twin = edge->twin->prev->twin;
+    edge->twin->prev->twin->twin = edge->twin->next->twin;
+
+    Face* face1 = edge->face;
+    Face* face2 = edge->twin->face;
+
+    cur = start = face1->edge; counter = 0;
+
+    edge->isValid = false;
+	edge->next->isValid = false;
+	edge->prev->isValid = false;
+	edge->twin->isValid = false;
+    assert(edge->twin != v1->edge);
+	edge->twin->next->isValid = false;
+	edge->twin->prev->isValid = false;
+
+    face1->isValid = false;
+    face2->isValid = false;
+    v2->isValid = false;
+
+ //   assert(v1->isValid);
+ //   assert(v1->edge->isValid);
+ //   assert(v1adj->edge->isValid);
+ //   assert(v2adj->edge->isValid);
+
+ //   cur = start = v1->edge; counter = 0;
+ //   std::unordered_set<HalfEdge*> setting;
+ //   do {
+ //       cur = cur->twin->next;
+ //       assert(cur->isValid);
+	//	if (setting.find(cur) != setting.end()) assert(false);
+ //       setting.insert(cur);
+ //       assert(counter++ < 1000);
+ //   } while (cur != start);
+
+	//setting.clear();
+	//cur = start = v1adj->edge; counter = 0;
+	//do {
+	//	cur = cur->twin->next;
+	//	assert(cur->isValid);
+	//	if (setting.find(cur) != setting.end()) assert(false);
+	//	setting.insert(cur);
+	//	assert(counter++ < 1000);
+	//} while (cur != start);
+
+	//setting.clear();
+	//cur = start = v2adj->edge; counter = 0;
+	//do {
+	//	cur = cur->twin->next;
+	//	assert(cur->isValid);
+	//	if (setting.find(cur) != setting.end()) assert(false);
+	//	setting.insert(cur);
+	//	assert(counter++ < 1000);
+	//} while (cur != start);
+
+	//HalfEdgeMeshValidation();
 }
 
 void HalfEdgeMesh::recomputeCost(HalfVertex* vertex) {
@@ -235,42 +278,24 @@ void HalfEdgeMesh::recomputeCost(HalfVertex* vertex) {
     } while (currentEdge != startEdge);
 }
 
-
-void HalfEdgeMesh::clusterGroupQEM(QEMQueue& queue, int targetAmount) {
-    float totalError = 0.0f;
-    int targetEdgeReduct = targetAmount / 2;
-    while (m_vertices.size() > targetEdgeReduct) {
-        if (queue.empty()) {
-            std::cerr << "Priority queue is empty before reaching targetMerge." << std::endl;
-            break;
-        }
-
-        HalfEdge* edge = queue.top();
-        queue.pop();
-
-        if (edge->cost) {
-            totalError += edge->cost->val;
-        }
-
-        HalfVertex* v1 = mergeEdge(edge);
-        recomputeCost(v1);
-    }
-
-    std::cout << "Total simplification error: " << totalError << std::endl;
-}
-
 void HalfEdgeMesh::QEM(){
-    initCostComputation();
-    
-    // generate the QEMQueue
-    QEMQueue queue;
-    for (HalfEdge* edge : m_edges) {
-        if (edge < edge->twin) {
-            queue.push(edge);
+    int validFaces = m_faces.size();
+	int targetFaces = validFaces / 2;
+    while (validFaces > targetFaces) {
+        initCostComputation();
+        // generate the QEMQueue
+        QEMQueue queue;
+        for (HalfEdge* edge : m_edges) {
+            if ( edge->isValid && edge < edge->twin) {
+                queue.push(edge);
+            }
+        }
+		std::cout << "Queue size: " << queue.size() << std::endl;
+        edgeCollapse(queue.top());
+
+		validFaces = 0;
+        for (auto& face : m_faces) {
+            if (face->isValid) validFaces++;
         }
     }
-
-    int targetAmount = m_vertices.size() / 2;
-    clusterGroupQEM(queue, targetAmount);
 }
-

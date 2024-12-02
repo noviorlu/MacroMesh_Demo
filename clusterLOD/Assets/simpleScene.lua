@@ -13,6 +13,7 @@ white = gr.material({1.0, 1.0, 1.0}, {0.1, 0.1, 0.1}, 10)
 -- s0 = gr.mesh('dragon','s0')
 s0 = gr.mesh('suzanne','s0')
 -- s0 = gr.mesh('bunny','s0')
+-- s0 = gr.mesh('sphere','s0')
 rootnode:add_child(s0)
 s0:set_material(white)
 

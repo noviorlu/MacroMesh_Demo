@@ -57,7 +57,7 @@ Mesh::Mesh(
 	const ObjFilePath & objFile = *objFileList.begin();
 
 #if ENABLE_IBO == true
-    ObjFileDecoder::decode(objFile.c_str(), meshId, m_vertexData, m_indexData);
+    //ObjFileDecoder::decode(objFile.c_str(), meshId, m_vertexData, m_indexData);
     batchInfo.numIndices = m_indexData.size();
 #else
 	ObjFileDecoder::decode(objFile.c_str(), meshId, m_vertexPositionData, m_vertexNormalData, m_vertexUVData);
@@ -66,27 +66,6 @@ Mesh::Mesh(
 
 	batchInfo.startIndex = 0;
 	s_meshInfoMap[meshId] = this;
-
-#ifdef MESH_SANITY_CHECK
-    std::unordered_map<std::pair<int, int>, int, pair_hash> edgeCount;
-
-    for (size_t i = 0; i < m_indexData.size(); i += 3) {
-        int v0 = m_indexData[i];
-        int v1 = m_indexData[i + 1];
-        int v2 = m_indexData[i + 2];
-
-        edgeCount[{std::min(v0, v1), std::max(v0, v1)}]++;
-        edgeCount[{std::min(v1, v2), std::max(v1, v2)}]++;
-        edgeCount[{std::min(v2, v0), std::max(v2, v0)}]++;
-    }
-
-    for (const auto& [edge, count] : edgeCount) {
-        if (count != 2) {
-            std::cerr << "Edge (" << edge.first << " -> " << edge.second 
-                      << ") is used " << count << " times!" << std::endl;
-        }
-    }
-#endif
 }
 
 Mesh::Mesh(const Mesh& mesh, const std::vector<unsigned int>& triList) {

@@ -18,6 +18,10 @@ using namespace std;
 #include <glm/gtx/io.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <math.h>
+
+std::string AssetFilePath = "C:/projects/MacroMesh_Demo/clusterLOD/Assets/";
+std::string ModelFilePath = "C:/projects/MacroMesh_Demo/models/";
+
 #ifndef M_PI
     #define M_PI 3.14159265358979323846
 #endif
@@ -69,24 +73,26 @@ void clusterLOD::init()
 
 
 
-	m_meshConsolidator = new Mesh(
-        // std::initializer_list<std::string>{
-            // getAssetFilePath("../../models/bunny/bunny.obj")
-            // getAssetFilePath("../../models/cube.obj")
-            // getAssetFilePath("../../models/suzanne.obj")
-            // getAssetFilePath("../../models/dragon/dragon.obj")
-        // }
-    );
+	//m_meshConsolidator = new Mesh(
+ //       std::initializer_list<std::string>{
+ //           //((ModelFilePath + "bunny/bunny.obj").c_str())
+	//		//((ModelFilePath + "sphere.obj").c_str())
+	//		((ModelFilePath + "suzanne.obj").c_str())
+	//		//((ModelFilePath + "cube.obj").c_str())
+ //           // ("../../models/suzanne.obj")
+ //           // ("../../models/dragon/dragon.obj")
+ //       }
+ //   );
 
-	
-
-	// HalfEdgeMesh* halfEdgeMesh = new HalfEdgeMesh(*m_meshConsolidator);
-
-	HalfEdgeMesh* halfEdgeMesh = new HalfEdgeMesh("../../models/suzanne.obj");
+	HalfEdgeMesh* halfEdgeMesh = new HalfEdgeMesh(ModelFilePath + "sphere.obj");
 	// halfEdgeMesh->partition_loop();
 	// halfEdgeMesh->exportMesh(m_meshConsolidator->m_clusterList, m_meshConsolidator->m_clusterGroupList);
-	halfEdgeMesh->QEM();
-	halfEdgeMesh->exportMesh(*m_meshConsolidator);
+	 halfEdgeMesh->QEM();
+	halfEdgeMesh->exportMesh(((ModelFilePath + "sphere_QEM.obj").c_str()));
+	// halfEdgeMesh->exportMesh(*m_meshConsolidator);
+	exit(0);
+	
+	
 	// print triangle count
 	std::cout << "Triangle count: " << m_meshConsolidator->m_indexData.size() / 3 << std::endl;
 	// MeshSplitter(*m_meshConsolidator);
@@ -120,7 +126,7 @@ void clusterLOD::processLuaSceneFile(const std::string & filename) {
 	// This version of the code treats the Lua file as an Asset,
 	// so that you'd launch the program with just the filename
 	// of a puppet in the Assets/ directory.
-	// std::string assetFilePath = getAssetFilePath(filename.c_str());
+	// std::string assetFilePath = (filename.c_str());
 	// m_rootNode = std::shared_ptr<SceneNode>(import_lua(assetFilePath));
 
 	// This version of the code treats the main program argument
@@ -135,18 +141,18 @@ void clusterLOD::processLuaSceneFile(const std::string & filename) {
 void clusterLOD::createShaderProgram()
 {
 	m_geometryPass.generateProgramObject();
-	m_geometryPass.attachVertexShader( getAssetFilePath("Deferred/GeometryPass.vs").c_str() );
-	m_geometryPass.attachFragmentShader( getAssetFilePath("Deferred/GeometryPass.fs").c_str() );
+	m_geometryPass.attachVertexShader( (AssetFilePath + "Deferred/GeometryPass.vs").c_str() );
+	m_geometryPass.attachFragmentShader( (AssetFilePath + "Deferred/GeometryPass.fs").c_str() );
 	m_geometryPass.link();
 
 	m_lightingPass.generateProgramObject();
-	m_lightingPass.attachVertexShader( getAssetFilePath("Deferred/LightPass.vs").c_str() );
-	m_lightingPass.attachFragmentShader( getAssetFilePath("Deferred/LightPass.fs").c_str() );
+	m_lightingPass.attachVertexShader( (AssetFilePath + "Deferred/LightPass.vs").c_str() );
+	m_lightingPass.attachFragmentShader( (AssetFilePath + "Deferred/LightPass.fs").c_str() );
 	m_lightingPass.link();
 
 	m_shader_arcCircle.generateProgramObject();
-	m_shader_arcCircle.attachVertexShader( getAssetFilePath("arc_VertexShader.vs").c_str() );
-	m_shader_arcCircle.attachFragmentShader( getAssetFilePath("arc_FragmentShader.fs").c_str() );
+	m_shader_arcCircle.attachVertexShader( (AssetFilePath + "arc_VertexShader.vs").c_str() );
+	m_shader_arcCircle.attachFragmentShader( (AssetFilePath + "arc_FragmentShader.fs").c_str() );
 	m_shader_arcCircle.link();
 }
 

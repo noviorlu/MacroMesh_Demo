@@ -5,14 +5,18 @@
 #include <glm/glm.hpp>
 
 #include <queue>
+#include <unordered_set>
+#include <array>
+#include <algorithm>
 
 struct HalfVertex;
 struct HalfEdge;
-struct Edge;
 struct Face;
 
 struct HalfVertex : public Vertex {
-    HalfEdge* edge;
+    bool isValid = true;
+    
+    HalfEdge* edge = nullptr;
     glm::mat4 quadric;
 
     HalfVertex() : Vertex(), edge(nullptr), quadric(0.0f) {}
@@ -28,30 +32,24 @@ struct HalfVertex : public Vertex {
     std::vector<HalfVertex*> getAdjacentVertices();
 };
 
-struct Face {
-    HalfEdge* edge;
-    Face(HalfEdge* edge) : edge(edge) {}
-
-    void updateFaceQuadric();
-};
-
 struct HalfEdge {
-    HalfVertex* origin;
-    HalfEdge* twin;
-    HalfEdge* next;
-    HalfEdge* prev;
-    Face* face;
+	bool isValid = true;
+
+    HalfVertex* origin = nullptr;
+    HalfEdge* twin = nullptr;
+    HalfEdge* next = nullptr;
+    HalfEdge* prev = nullptr;
+    Face* face = nullptr;
 
     struct Cost{
         float val;
-        float lerpValue; 
-        float distanceToLine;
+		glm::vec3 optimalPosition;
         
         bool operator<(const Cost& other) const {
             return val < other.val;
         }
     };
-    Cost* cost;
+    Cost cost;
 
     HalfEdge() {
         origin = nullptr;
@@ -59,30 +57,66 @@ struct HalfEdge {
         next = nullptr;
         prev = nullptr;
         face = nullptr;
-        cost = nullptr;
     }
-    ~HalfEdge() {
-        if(cost != nullptr) {
-            delete cost;
-            cost = nullptr;
-            twin->cost = nullptr;
-        }
-        
-    }
+    ~HalfEdge() {}
     void LerpVertex(Vertex& vert);
     void computeEdgeCost(bool force);
 };
 
+// Define the hash function
+struct HashHalfEdge {
+    size_t operator()(const HalfEdge* edge) const {
+        if (edge == nullptr || edge->origin == nullptr || edge->twin == nullptr || edge->twin->origin == nullptr) {
+            return 0;
+        }
+        HalfVertex* v1 = edge->origin;
+        HalfVertex* v2 = edge->twin->origin;
+
+        size_t h1 = std::hash<HalfVertex*>()(v1);
+        size_t h2 = std::hash<HalfVertex*>()(v2);
+        return h1 ^ (h2 * 31);
+    }
+};
+
+// Define the equality function for unordered_set
+struct EqualHalfEdge {
+    bool operator()(const HalfEdge* a, const HalfEdge* b) const {
+        if (a == nullptr || b == nullptr) return false;
+        HalfVertex* a1 = a->origin;
+        HalfVertex* a2 = a->twin->origin;
+        HalfVertex* b1 = b->origin;
+        HalfVertex* b2 = b->twin->origin;
+
+        // Check if the sets {a1, a2} and {b1, b2} are equal (ignoring order)
+        return (a1 == b1 && a2 == b2);
+    }
+};
 struct CompareHalfEdgeCost {
     bool operator()(HalfEdge* a, HalfEdge* b) const {
-        if (a->cost == nullptr || b->cost == nullptr) {
-            return a->cost == nullptr;
-        }
-        return a->cost->val < b->cost->val;
+        return a->cost.val < b->cost.val;
     }
 };
 
 using QEMQueue = std::priority_queue<HalfEdge*, std::vector<HalfEdge*>, CompareHalfEdgeCost>;
+
+struct Face {
+    bool isValid = true;
+
+    HalfEdge* edge = nullptr;
+    Face(HalfEdge* edge) : edge(edge) {}
+
+    void updateFaceQuadric();
+
+    friend std::ostream& operator<<(std::ostream& os, const Face& face) {
+        os << "Face Info:\n";
+        os << "Face pointer: " << &face << "\n";
+        os << " - isValid: " << (face.isValid ? "true" : "false") << "\n";
+        os << " - edge: " << face.edge;
+        os << " - next: " << face.edge->next;
+        os << " - prev: " << face.edge->prev << "\n";
+        return os;
+    }
+};
 
 
 class HalfEdgeMesh {
@@ -93,7 +127,7 @@ public:
     ~HalfEdgeMesh();
     void exportMesh(Mesh& mesh);
     void exportMesh(std::vector<Cluster>& clusters, std::vector<ClusterGroup>& clusterGroups);
-
+    void exportMesh(const std::string& objFilePath);
 private:
     std::vector<HalfVertex*> m_vertices;
     std::vector<HalfEdge*> m_edges;
@@ -104,10 +138,11 @@ public:
     void QEM();
 private:
     void initCostComputation();
-    HalfVertex* mergeEdge(HalfEdge* edge);
+    //HalfVertex* mergeEdge(HalfEdge* edge);
+    void edgeCollapse(HalfEdge* edge);
     void recomputeCost(HalfVertex* vertex);
     void clusterGroupQEM(QEMQueue& queue, int targetMerge);
-    
+    std::unordered_set<HalfEdge*> m_garbageEdgeCollector;
 
 private:
     void BuildAdjacencyListForRange(
@@ -125,10 +160,35 @@ private:
     std::vector<size_t> m_clusterOffsets;
     std::vector<size_t> m_clusterGroupOffsets;
 
-
-
 /// Debugging functions
     void HalfEdgeMeshValidation();
     void HalfEdgeMeshPrint();
     friend void QEMTestcase();
+    friend void QEMTestcase1();
+};
+
+
+using TripleHalfVertex = std::array<HalfVertex*, 3>;
+
+struct TripleHalfVertexHash {
+    size_t operator()(const TripleHalfVertex& vertices) const {
+        TripleHalfVertex sortedVertices = vertices;
+        std::sort(sortedVertices.begin(), sortedVertices.end());
+
+        size_t seed = 0;
+        for (HalfVertex* v : sortedVertices) {
+            seed ^= std::hash<HalfVertex*>{}(v)+0x9e3779b9 + (seed << 6) + (seed >> 2);
+        }
+        return seed;
+    }
+};
+
+struct TripleHalfVertexEqual {
+    bool operator()(const TripleHalfVertex& lhs, const TripleHalfVertex& rhs) const {
+        TripleHalfVertex sortedLhs = lhs;
+        TripleHalfVertex sortedRhs = rhs;
+        std::sort(sortedLhs.begin(), sortedLhs.end());
+        std::sort(sortedRhs.begin(), sortedRhs.end());
+        return sortedLhs == sortedRhs;
+    }
 };

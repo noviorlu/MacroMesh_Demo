@@ -42,17 +42,29 @@ namespace std {
 
     template <>
     struct hash<glm::vec3> {
-        std::size_t operator()(const glm::vec3& v) const noexcept {
-            return std::hash<float>()(v.x) ^ (std::hash<float>()(v.y) << 1) ^ (std::hash<float>()(v.z) << 2);
+        std::size_t operator()(const glm::vec3& vec) const {
+            auto hashX = std::hash<float>{}(vec.x);
+            auto hashY = std::hash<float>{}(vec.y);
+            auto hashZ = std::hash<float>{}(vec.z);
+            return hashX ^ (hashY << 1) ^ (hashZ << 2);
+        }
+    };
+
+    template <>
+    struct equal_to<glm::vec3> {
+        bool operator()(const glm::vec3& lhs, const glm::vec3& rhs) const {
+            return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
+        }
+    };
+
+    template <typename T1, typename T2>
+    struct hash<std::pair<T1, T2>> {
+        std::size_t operator()(const std::pair<T1, T2>& pair) const {
+            T1 smaller = std::min(pair.first, pair.second);
+            T2 larger = std::max(pair.first, pair.second);
+
+            return std::hash<T1>()(smaller) ^ (std::hash<T2>()(larger) << 1);
         }
     };
 }
 
-struct pair_hash {
-    template <typename T1, typename T2>
-    std::size_t operator()(const std::pair<T1, T2>& pair) const {
-        T1 smaller = std::min(pair.first, pair.second);
-        T2 larger = std::max(pair.first, pair.second);
-        return std::hash<T1>()(smaller) ^ (std::hash<T2>()(larger) << 1);
-    }
-};
