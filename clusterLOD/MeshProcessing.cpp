@@ -134,12 +134,23 @@ void HalfEdgeMesh::partition_loop(){
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 void EMesh::buildAdjacencyFaces(){
     int i = 0;
     for (auto& face : m_faces) {
-        face->idx = i;
-        i++;
-
         VertexPair pair1(face->vertices[0], face->vertices[1]);
         VertexPair pair2(face->vertices[1], face->vertices[2]);
         VertexPair pair3(face->vertices[2], face->vertices[0]);
@@ -258,11 +269,22 @@ void EMesh::eMeshSplitter() {
     
     auto end = std::chrono::high_resolution_clock::now();
     std::cout << "Mesh Partitioning Time: " << std::chrono::duration_cast<std::chrono::seconds>(end - start).count() << "s" << std::endl;
+
+    start = std::chrono::high_resolution_clock::now();
+    eMeshClusterGrouper();
+    end = std::chrono::high_resolution_clock::now();
+    std::cout << "Cluster Grouping Time: " << std::chrono::duration_cast<std::chrono::seconds>(end - start).count() << "s" << std::endl;
+
 }
 
 void EMesh::buildAdjacencyListForCluster(
     std::vector<std::vector<size_t>>& adjacency_list
 ) {
+    std::unordered_map<const EFace*, size_t> faceToIndexMap;
+    for (size_t i = 0; i < m_faces.size(); ++i) {
+        faceToIndexMap[m_faces[i]] = i;
+    }
+    
     std::vector<std::unordered_set<size_t>> adjacencySetList(m_clusterOffsets.size());
 
     auto findClusterIndex = [this](int faceIdx) -> size_t {
@@ -276,7 +298,7 @@ void EMesh::buildAdjacencyListForCluster(
 
         for (size_t j = startIdx; j < endIdx; ++j) {
             for (auto adjFace : m_faces[j]->adjacentFaces) {
-                size_t adjClusterIdx = findClusterIndex(adjFace->idx);
+                size_t adjClusterIdx = findClusterIndex(faceToIndexMap[adjFace]);
                 if (i != adjClusterIdx) {
                     adjacencySetList[i].insert(adjClusterIdx);
                 }
@@ -290,11 +312,11 @@ void EMesh::buildAdjacencyListForCluster(
     }
 }
 
-void EMesh::eMeshClusterGrouper(){
+void EMesh::eMeshClusterGrouper() {
     std::vector<std::vector<size_t>> adjacencyList;
     buildAdjacencyListForCluster(adjacencyList);
 
-    size_t numClusters = adjacencyList.size();
+    idx_t numClusters = adjacencyList.size();
 
     std::vector<idx_t> xadj(numClusters + 1, 0);
     std::vector<idx_t> adjncy;
@@ -309,21 +331,28 @@ void EMesh::eMeshClusterGrouper(){
     idx_t numParts = static_cast<idx_t>(
         (numClusters + MAX_CLUSTER_IN_CLUSTERGROUP - 1) / MAX_CLUSTER_IN_CLUSTERGROUP
     );
+    if (numParts > numClusters) {
+        numParts = numClusters;
+    }
 
-    std::vector<idx_t> partitionResult(numClusters);
+    idx_t ncon = 1;
+    std::vector<real_t> tpwgts(numParts * ncon, 1.0 / numParts);
+    std::vector<real_t> ubvec(ncon, 1.05);
+
+    std::vector<idx_t> partitionResult(numClusters, 0);
     idx_t edgeCut;
 
     int result = METIS_PartGraphKway(
-        reinterpret_cast<idx_t*>(&numClusters),
-        NULL,
+        &numClusters,
+        &ncon,
         xadj.data(),
         adjncy.data(),
         NULL,
         NULL,
         NULL,
         &numParts,
-        NULL,
-        NULL,
+        tpwgts.data(),
+        ubvec.data(),
         NULL,
         &edgeCut,
         partitionResult.data()
@@ -333,11 +362,15 @@ void EMesh::eMeshClusterGrouper(){
         std::cerr << "METIS partitioning failed with error code: " << result << std::endl;
         return;
     }
+    m_clusterGroup.clear();
+    m_clusterGroup.resize(numParts);
 
     for (size_t clusterIdx = 0; clusterIdx < partitionResult.size(); ++clusterIdx) {
         idx_t groupIdx = partitionResult[clusterIdx];
+        if (groupIdx >= m_clusterGroup.size()) {
+            std::cerr << "Error: groupIdx out of range: " << groupIdx << std::endl;
+            return;
+        }
         m_clusterGroup[groupIdx].push_back(clusterIdx);
     }
-
 }
-

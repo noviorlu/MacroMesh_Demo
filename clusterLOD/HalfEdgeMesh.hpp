@@ -276,7 +276,6 @@ struct EFace {
 	}
     void updateFaceQuadric();
 
-    int idx = -1;
     std::vector<EFace*> adjacentFaces; // at most 3, for partition propose
 };
 

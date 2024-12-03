@@ -66,6 +66,9 @@
         "xtree": "cpp",
         "xutility": "cpp",
         "deque": "cpp",
-        "queue": "cpp"
+        "queue": "cpp",
+        "chrono": "cpp",
+        "forward_list": "cpp",
+        "ratio": "cpp"
     }
 }
