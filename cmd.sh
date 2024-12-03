@@ -13,9 +13,11 @@ premake5 vs2022
 msbuild vsproject\CS488-Projects.sln /property:Configuration=Debug /property:Platform=x64 /t:Rebuild
 msbuild vsproject\CS488-Projects.sln /property:Configuration=Release /property:Platform=x64 /t:Rebuild
 
-msbuild vsproject\CS488-Projects.sln /property:Configuration=Debug /property:Platform=x64 /t:Build
+
 
 msbuild vsproject\CS488-Projects.sln /property:Configuration=Release /property:Platform=x64 /t:Build
+
+msbuild vsproject\CS488-Projects.sln /property:Configuration=Debug /property:Platform=x64 /t:Build
 .\bin\cluster\cluster.exe .\Assets\simpleScene.lua
 
 

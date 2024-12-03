@@ -297,7 +297,7 @@ void HalfEdgeMesh::exportMesh(std::vector<Cluster>& clusters, std::vector<Cluste
         size_t startCluster = m_clusterGroupOffsets[i];
         size_t endCluster = (i + 1 < m_clusterGroupOffsets.size()) ? m_clusterGroupOffsets[i + 1] : clusters.size();
 
-        ClusterGroup group;
+        ClusterGroup group(0.0f);
         for (size_t clusterIdx = startCluster; clusterIdx < endCluster; ++clusterIdx) {
             group.clusters.push_back(&clusters[clusterIdx]);
         }
@@ -560,21 +560,13 @@ void HalfEdgeMesh::HalfEdgeMeshPrint() {
 
 
 
-
-
-
-
-
-
-
 void EMesh::importEMesh(const std::string& objFilePath) {
-    std::string objectName;
     std::vector<glm::vec3> positions;
     std::vector<glm::vec3> normals;
     std::vector<glm::vec2> uvCoords;
 
     auto starttime = std::chrono::high_resolution_clock::now();
-    ObjFileDecoder::decode(objFilePath.c_str(), objectName, positions, normals, uvCoords);
+    ObjFileDecoder::decode(objFilePath.c_str(), m_name, positions, normals, uvCoords);
 
     auto endtime = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = endtime - starttime;
@@ -584,11 +576,11 @@ void EMesh::importEMesh(const std::string& objFilePath) {
 
     std::unordered_map<glm::vec3, EVertex*> vertexMap;
 
-    m_edges.clear();
+    m_edgeMap.clear();
     m_faces.clear();
     m_vertices.clear();
 
-    m_edges.reserve(positions.size());
+    m_edgeMap.reserve(positions.size());
     m_faces.reserve(positions.size() / 3);
     m_vertices.reserve(positions.size());
 
@@ -603,14 +595,14 @@ void EMesh::importEMesh(const std::string& objFilePath) {
     auto createEdge = [&](EVertex* v1, EVertex* v2, EFace* face) {
         VertexPair pair(v1, v2);
 		EEdge* edge = nullptr;
-        if (m_edges.find(pair) == m_edges.end()) {
+        if (m_edgeMap.find(pair) == m_edgeMap.end()) {
 			edge = new EEdge(pair, face);
-            m_edges.emplace(pair, edge);
+            m_edgeMap.emplace(pair, edge);
             v1->addEdge(edge);
             v2->addEdge(edge);
 		}
 		else {
-			edge = m_edges[pair];
+			edge = m_edgeMap[pair];
 
 			edge->addFace(face);
 		}
@@ -645,7 +637,7 @@ void EMesh::importEMesh(const std::string& objFilePath) {
         }
     }
 
-    for(auto& [pair, edge] : m_edges) {
+    for(auto& [pair, edge] : m_edgeMap) {
         if(edge->faces.size() == 1) {
             edge->isBoundary = true;
         }
@@ -698,6 +690,46 @@ void EMesh::exportEMesh(const std::string& objFilePath) {
     outFile.close();
 }
 
+void EMesh::exportEMesh(std::vector<Cluster>& clusters, std::vector<ClusterGroup>& clusterGroups) {
+    clusters.clear();
+    clusterGroups.clear();
+
+    for (size_t i = 0; i < m_clusterOffsets.size(); ++i) {
+        size_t startFace = m_clusterOffsets[i];
+        size_t endFace = (i + 1 < m_clusterOffsets.size()) ? m_clusterOffsets[i + 1] : m_faces.size();
+
+        Cluster cluster(0.0f);
+        std::unordered_map<EVertex*, unsigned int> vertexIndexMap;
+        unsigned int clusterVertexIndex = 0;
+
+        for (size_t faceIdx = startFace; faceIdx < endFace; ++faceIdx) {
+            EFace* face = m_faces[faceIdx];
+
+            for (EVertex* vertex : face->vertices) {
+                if (vertexIndexMap.find(vertex) == vertexIndexMap.end()) {
+                    vertexIndexMap[vertex] = clusterVertexIndex++;
+                    cluster.m_vertexData.emplace_back(
+                        vertex->position,
+                        vertex->normal,
+                        vertex->uv
+                    );
+                }
+                cluster.m_indexData.push_back(vertexIndexMap[vertex]);
+            }
+        }
+        clusters.push_back(std::move(cluster));
+    }
+
+    // for (const auto& group : m_clusterGroup) {
+    //     ClusterGroup clusterGroup(0.0f);
+    //     for (size_t clusterIdx : group) {
+    //         clusterGroup.clusters.push_back(&clusters[clusterIdx]);
+    //     }
+    //     clusterGroup.setGroupColor();
+    //     clusterGroups.push_back(std::move(clusterGroup));
+    // }
+}
+
 void EMesh::validate(){
     // face should not have empty vertices
     for (auto& face : m_faces) {
@@ -712,12 +744,12 @@ void EMesh::validate(){
             EVertex* v1 = face->vertices[i];
             EVertex* v2 = face->vertices[(i + 1) % 3];
             VertexPair pair(v1, v2);
-			if (m_edges.find(pair) == m_edges.end()) {
+			if (m_edgeMap.find(pair) == m_edgeMap.end()) {
 				std::cerr << "[ERROR] Face has an edge that is not in the edge list." << std::endl;
 				assert(false);
 			}
 
-            if(!m_edges[pair]->containFace(face)) {
+            if(!m_edgeMap[pair]->containFace(face)) {
                 std::cerr << "[<ERROR>] Face has an edge that does not contain the face. " << face << std::endl;
                 assert(false);
             }
@@ -725,7 +757,7 @@ void EMesh::validate(){
     }
 
     // edge should not have empty vertices
-    for (auto& [pair, edge] : m_edges) {
+    for (auto& [pair, edge] : m_edgeMap) {
         if (edge->isValid == false) continue;
         if (edge->vertices.v1 == nullptr || edge->vertices.v2 == nullptr) {
             std::cerr << "[ERROR] Edge has empty vertices." << std::endl;
@@ -764,7 +796,7 @@ void EMesh::print() {
     }
 
     std::cout << "Edges:" << std::endl;
-    for (const auto& [pair, edge] : m_edges) {
+    for (const auto& [pair, edge] : m_edgeMap) {
         if (edge->isValid == false) continue;
         std::cout << "Edge " << edge << ": (" << pair.v1 << ", " << pair.v2 << ") Faces: ";
         for (const auto& face : edge->faces) {
@@ -777,12 +809,9 @@ void EMesh::print() {
     for (const auto& face : m_faces) {
         if (face->isValid == false) continue;
         std::cout << "Face " << face << ": ";
-        std::cout << m_edges[VertexPair(face->vertices[0], face->vertices[1])] << " ";
-        std::cout << m_edges[VertexPair(face->vertices[1], face->vertices[2])] << " ";
-        std::cout << m_edges[VertexPair(face->vertices[2], face->vertices[0])] << " ";
+        std::cout << m_edgeMap[VertexPair(face->vertices[0], face->vertices[1])] << " ";
+        std::cout << m_edgeMap[VertexPair(face->vertices[1], face->vertices[2])] << " ";
+        std::cout << m_edgeMap[VertexPair(face->vertices[2], face->vertices[0])] << " ";
         std::cout << std::endl;
     }
 }
-
-
-

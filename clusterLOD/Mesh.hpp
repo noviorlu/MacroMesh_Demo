@@ -83,4 +83,8 @@ class ClusterGroup {
 public:
     float Error;
     std::vector<Cluster*> clusters;
+
+	ClusterGroup(float Error);
+
+	void setGroupColor();
 };

@@ -320,10 +320,10 @@ void EMesh::edgeCollapse(EEdge* edge){
         VertexPair pair2(face->vertices[1], face->vertices[2]);
         VertexPair pair3(face->vertices[2], face->vertices[0]);
 
-        // find the edges from m_edges
-        EEdge* edge1 = m_edges[pair1];
-        EEdge* edge2 = m_edges[pair2];
-        EEdge* edge3 = m_edges[pair3];
+        // find the edges from m_edgeMap
+        EEdge* edge1 = m_edgeMap[pair1];
+        EEdge* edge2 = m_edgeMap[pair2];
+        EEdge* edge3 = m_edgeMap[pair3];
 
         edge1->removeFace(face);
         edge2->removeFace(face);
@@ -341,7 +341,7 @@ void EMesh::edgeCollapse(EEdge* edge){
         EVertex* v = adjEdge->vertices.v1 == v2 ? adjEdge->vertices.v2 : adjEdge->vertices.v1;
         if(v == v1) continue;
 
-        m_edges.erase(adjEdge->vertices);
+        m_edgeMap.erase(adjEdge->vertices);
         VertexPair pair(v1, v);
 
         // update the faces of the adjacent edge
@@ -352,14 +352,14 @@ void EMesh::edgeCollapse(EEdge* edge){
                 }
             }
         }
-        if (m_edges.find(pair) != m_edges.end()) { // if exist, merge the duplicate edges by copying faces to the existing edge
+        if (m_edgeMap.find(pair) != m_edgeMap.end()) { // if exist, merge the duplicate edges by copying faces to the existing edge
             while(EFace* popface = adjEdge->popFace()){
-                m_edges[pair]->addFace(popface);
+                m_edgeMap[pair]->addFace(popface);
             }
             adjEdge->isValid = false;
         }
         else{
-            m_edges[pair] = adjEdge;
+            m_edgeMap[pair] = adjEdge;
             adjEdge->vertices = pair;
             v1->addEdge(adjEdge);
         }
@@ -379,7 +379,7 @@ void EMesh::edgeCollapse(EEdge* edge){
         face->updateFaceQuadric();
     }
 
-    for(auto& edge : m_edges){
+    for(auto& edge : m_edgeMap){
         edge.second->computeEdgeCost();
     }
 
@@ -434,14 +434,14 @@ void EMesh::QEM(float ratio){
     }
 
     // calculate edge cost
-    for (auto& [pair, edge] : m_edges) {
+    for (auto& [pair, edge] : m_edgeMap) {
         if (!edge->isValid) continue;
         edge->computeEdgeCost();
     }
 
     // create the priority queue and collapse the edges
     EEdgePriorityQueue pq;
-    for (auto& [pair, edge] : m_edges) {
+    for (auto& [pair, edge] : m_edgeMap) {
         pq.push(edge);
     }
 

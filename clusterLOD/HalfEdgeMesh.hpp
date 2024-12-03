@@ -271,8 +271,13 @@ struct EFace {
 		vertices[0] = v0;
 		vertices[1] = v1;
 		vertices[2] = v2;
+
+        adjacentFaces.reserve(3);
 	}
     void updateFaceQuadric();
+
+    int idx = -1;
+    std::vector<EFace*> adjacentFaces; // at most 3, for partition propose
 };
 
 class EMesh {
@@ -286,15 +291,40 @@ public:
             return h1 ^ (h2 << 1);
         }
     };
-	std::unordered_map<VertexPair, EEdge*, VertexPairHash> m_edges;
+	std::unordered_map<VertexPair, EEdge*, VertexPairHash> m_edgeMap;
 
+public:
+    std::string m_name;
 	void importEMesh(const std::string& objFilePath);
 	void exportEMesh(const std::string& objFilePath);
+    void exportEMesh(std::vector<Cluster>& clusters, std::vector<ClusterGroup>& clusterGroups);
+public:
+    void buildAdjacencyFaces();
+    void buildAdjacencyListForRange(
+        std::vector<std::vector<size_t>>& adjacency_list,
+        size_t startIdx,
+        size_t endIdx
+    );
+    void eMeshSplitterRecursive(
+        size_t startIdx,
+        size_t endIdx
+    );
+    void buildAdjacencyListForCluster(
+        std::vector<std::vector<size_t>>& adjacency_list
+    );
+    void eMeshClusterGrouper();
+
+    void eMeshSplitter();
+    std::vector<size_t> m_clusterOffsets;
+    std::vector<std::vector<size_t>> m_clusterGroup;
+
+public:
     void QEM(float ratio);
     void edgeCollapse(EEdge* edge);
 
     int m_validFaces = 0;
 
+public:
     void validate();
     void print();
 };

@@ -9,7 +9,6 @@ using namespace std;
 #include "GeometryNode.hpp"
 #include "JointNode.hpp"
 
-#include "Cluster.hpp"
 #include "HalfEdgeMesh.hpp"
 
 #include <imgui/imgui.h>
@@ -71,9 +70,7 @@ void clusterLOD::init()
 
 	processLuaSceneFile(m_luaSceneFile);
 
-
-
-	//m_meshConsolidator = new Mesh(
+	m_meshConsolidator = new Mesh(
  //       std::initializer_list<std::string>{
  //           //((ModelFilePath + "bunny/bunny.obj").c_str())
 	//		//((ModelFilePath + "sphere.obj").c_str())
@@ -82,7 +79,7 @@ void clusterLOD::init()
  //           // ("../../models/suzanne.obj")
  //           // ("../../models/dragon/dragon.obj")
  //       }
- //   );
+   );
 
 	//HalfEdgeMesh* halfEdgeMesh = new HalfEdgeMesh(ModelFilePath + "suzanne.obj");
 	// halfEdgeMesh->partition_loop();
@@ -93,14 +90,15 @@ void clusterLOD::init()
 
 	EMesh eMesh;
 	eMesh.importEMesh(ModelFilePath + "bunny/bunny.obj");
-	eMesh.QEM(0.5);
-	eMesh.exportEMesh(ModelFilePath + "bunny_E.obj");
+	eMesh.eMeshSplitter();
 
-	exit(0);
-	
+	Mesh::s_meshInfoMap[eMesh.m_name] = m_meshConsolidator;
+	eMesh.exportEMesh(m_meshConsolidator->m_clusterList, m_meshConsolidator->m_clusterGroupList);
+	// eMesh.QEM(0.5);
+	// eMesh.exportEMesh(ModelFilePath + "bunny_E.obj");
+	// exit(0);
 	
 	// print triangle count
-	std::cout << "Triangle count: " << m_meshConsolidator->m_indexData.size() / 3 << std::endl;
 	// MeshSplitter(*m_meshConsolidator);
 	// std::vector<ClusterGroup*> cluster_groups;
 	// clusterGrouping(*m_meshConsolidator, cluster_groups);
