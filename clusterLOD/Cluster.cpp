@@ -1,6 +1,5 @@
 
 #include "Mesh.hpp"
-
 glm::vec3 HSVtoRGB(float h, float s, float v) {
     h = fmod(h, 1.0f) * 6.0f;
     int i = static_cast<int>(floor(h));
@@ -10,13 +9,13 @@ glm::vec3 HSVtoRGB(float h, float s, float v) {
     float t = v * (1.0f - (1.0f - f) * s);
 
     switch (i) {
-        case 0: return glm::vec3(v, t, p);
-        case 1: return glm::vec3(q, v, p);
-        case 2: return glm::vec3(p, v, t);
-        case 3: return glm::vec3(p, q, v);
-        case 4: return glm::vec3(t, p, v);
-        case 5: return glm::vec3(v, p, q);
-        default: return glm::vec3(0.0f, 0.0f, 0.0f);
+    case 0: return glm::vec3(v, t, p);
+    case 1: return glm::vec3(q, v, p);
+    case 2: return glm::vec3(p, v, t);
+    case 3: return glm::vec3(p, q, v);
+    case 4: return glm::vec3(t, p, v);
+    case 5: return glm::vec3(v, p, q);
+    default: return glm::vec3(0.0f, 0.0f, 0.0f);
     }
 }
 

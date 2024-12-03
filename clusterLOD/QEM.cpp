@@ -339,7 +339,9 @@ void EMesh::edgeCollapse(EEdge* edge){
     // merging v2 into v1 of edge
     EVertex* v1 = edge->vertices.v1;
     EVertex* v2 = edge->vertices.v2;
-
+    if (v2->isFakeBoundary) {
+		std::swap(v1, v2);
+    }
 
     v1->position = edge->cost.optimalPosition;
 
@@ -352,13 +354,18 @@ void EMesh::edgeCollapse(EEdge* edge){
         VertexPair pair3(face->vertices[2], face->vertices[0]);
 
         // find the edges from m_edgeMap
-        EEdge* edge1 = m_edgeMap[pair1];
-        EEdge* edge2 = m_edgeMap[pair2];
-        EEdge* edge3 = m_edgeMap[pair3];
-
-        edge1->removeFace(face);
-        edge2->removeFace(face);
-        edge3->removeFace(face);
+        if (m_edgeMap.find(pair1) != m_edgeMap.end()) {
+            EEdge* edge1 = m_edgeMap[pair1];
+            if (edge1->containFace(face)) edge1->removeFace(face);
+        }
+		if (m_edgeMap.find(pair2) != m_edgeMap.end()) {
+			EEdge* edge2 = m_edgeMap[pair2];
+			if (edge2->containFace(face)) edge2->removeFace(face);
+		}
+		if (m_edgeMap.find(pair3) != m_edgeMap.end()) {
+			EEdge* edge3 = m_edgeMap[pair3];
+			if (edge3->containFace(face)) edge3->removeFace(face);
+		}
         
         face->isValid = false;
     }
@@ -383,8 +390,9 @@ void EMesh::edgeCollapse(EEdge* edge){
             }
         }
         if (m_edgeMap.find(pair) != m_edgeMap.end()) { // if exist, merge the duplicate edges by copying faces to the existing edge
+			EEdge* existEdge = m_edgeMap[pair];
             while(EFace* popface = adjEdge->popFace()){
-                m_edgeMap[pair]->addFace(popface);
+                existEdge->addFace(popface);
             }
             adjEdge->isValid = false;
         }
@@ -398,8 +406,10 @@ void EMesh::edgeCollapse(EEdge* edge){
     std::unordered_set<EFace*> faces;
     v1->quadric = glm::mat4(0.0f);
     for(auto egde : v1->edges){
+        if (egde->isBoundary || !egde->isValid || edge->isDirty || edge->isFakeBoundary) continue;
         if(edge->vertices.v1 == v1) egde->vertices.v2->quadric = glm::mat4(0.0f);
         else egde->vertices.v1->quadric = glm::mat4(0.0f);
+		if (egde->faces.size() == 0) continue;
         for(auto& face : egde->faces){
             faces.insert(face);
         }

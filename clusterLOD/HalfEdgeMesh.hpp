@@ -119,14 +119,17 @@ struct Face {
 
 class HalfEdgeMesh {
 public:
+    std::string m_name;
+
     HalfEdgeMesh(){}
     HalfEdgeMesh(const Mesh& mesh);
-    HalfEdgeMesh(const std::string& objFilePath);
     ~HalfEdgeMesh();
+    void importMesh(const std::string& objFilePath);
     void exportMesh(Mesh& mesh);
+    void exportMeshToObjFiles(const std::string& folderPath);
     void exportMesh(std::vector<Cluster>& clusters, std::vector<ClusterGroup>& clusterGroups);
     void exportMesh(const std::string& objFilePath);
-private:
+
     std::vector<HalfVertex*> m_vertices;
     std::vector<HalfEdge*> m_edges;
     std::vector<Face*> m_faces;
@@ -134,15 +137,17 @@ private:
 public:
     void partition_loop();
     void QEM();
-private:
+
     void initCostComputation();
-    //HalfVertex* mergeEdge(HalfEdge* edge);
     void edgeCollapse(HalfEdge* edge);
     void recomputeCost(HalfVertex* vertex);
     void clusterGroupQEM(QEMQueue& queue, int targetMerge);
     std::unordered_set<HalfEdge*> m_garbageEdgeCollector;
 
-private:
+public:
+    void BuildAdjacencyListForCluster(
+        std::vector<std::vector<size_t>>& adjacency_list
+    );
     void BuildAdjacencyListForRange(
         std::vector<std::vector<size_t>>& adjacency_list,
         size_t startIdx,
@@ -151,13 +156,12 @@ private:
     void HalfEdgeMeshSplitter();
     void HalfEdgeMeshSplitterRecursive(
         size_t startIdx,
-        size_t endIdx,
-        bool isParentClusterGroup
+        size_t endIdx
     );
 
     std::vector<size_t> m_clusterOffsets;
-    std::vector<size_t> m_clusterGroupOffsets;
-
+    std::vector<size_t> m_clusterGroupResult; // same size as m_clusterOffsets
+    int m_clusterGroupCount = 0;
 /// Debugging functions
     void HalfEdgeMeshValidation();
     void HalfEdgeMeshPrint();
@@ -326,6 +330,7 @@ public:
     std::string m_name;
 	void importEMesh(const std::string& objFilePath);
 	void exportEMesh(const std::string& objFilePath);
+    void exportEMeshToObjFiles(const std::string& folderPath);
     void exportEMesh(std::vector<Cluster>& clusters, std::vector<ClusterGroup>& clusterGroups);
 public:
     void buildAdjacencyFaces();
@@ -341,7 +346,6 @@ public:
     void buildAdjacencyListForCluster(
         std::vector<std::vector<size_t>>& adjacency_list
     );
-    void eMeshClusterGrouper();
 
     void eMeshSplitter();
     std::vector<size_t> m_clusterOffsets;
@@ -358,3 +362,9 @@ public:
     void print();
 };
 
+
+void ClusterGrouper(
+    const std::vector<std::vector<size_t>>& adjacencyList,
+    std::vector<size_t>& clusterGroupResult,
+    int& clusterGroupCount
+);

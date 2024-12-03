@@ -9,6 +9,50 @@
 #define MAX_CLUSTER_IN_CLUSTERGROUP 32
 #define MAX_TRI_IN_CLUSTERGROUP (MAX_TRI_IN_CLUSTER * MAX_CLUSTER_IN_CLUSTERGROUP)
 
+void HalfEdgeMesh::BuildAdjacencyListForCluster(
+    std::vector<std::vector<size_t>>& adjacency_list
+) {
+    adjacency_list.clear();
+	adjacency_list.resize(m_clusterOffsets.size());
+    std::vector<std::unordered_set<size_t>> adjacency_set(m_clusterOffsets.size());
+
+	std::unordered_map<const Face*, size_t> faceToIndexMap;
+    for (size_t i = 0; i < m_faces.size(); ++i) {
+        faceToIndexMap[m_faces[i]] = i;
+    }
+
+    auto findClusterIndex = [this, &faceToIndexMap](const Face* face) -> size_t {
+        size_t faceIdx = faceToIndexMap[face];
+        auto clusterIt = std::lower_bound(m_clusterOffsets.begin(), m_clusterOffsets.end(), faceIdx);
+        return (clusterIt == m_clusterOffsets.end() || *clusterIt > faceIdx) ? (clusterIt - m_clusterOffsets.begin() - 1) : (clusterIt - m_clusterOffsets.begin());
+    };
+
+    for(int i = 0; i < m_edges.size(); ++i){
+        HalfEdge* edge = m_edges[i];
+        if (!edge->isValid) continue;
+		if (edge > edge->twin) continue;
+
+        Face* face1 = edge->face;
+        Face* face2 = edge->twin->face;
+
+        if (face1 && face2) {
+            size_t clusterIdx1 = findClusterIndex(face1);
+            size_t clusterIdx2 = findClusterIndex(face2);
+
+            if (clusterIdx1 != clusterIdx2) {
+                adjacency_set[clusterIdx1].insert(clusterIdx2);
+                adjacency_set[clusterIdx2].insert(clusterIdx1);
+            }
+        }
+    }
+
+    for (size_t i = 0; i < m_clusterOffsets.size(); ++i) {
+        adjacency_list[i].reserve(adjacency_set[i].size());
+        adjacency_list[i] = std::vector<size_t>(adjacency_set[i].begin(), adjacency_set[i].end());
+    }
+}
+
+
 void HalfEdgeMesh::BuildAdjacencyListForRange(
     std::vector<std::vector<size_t>>& adjacency_list,
     size_t startIdx,
@@ -40,8 +84,7 @@ void HalfEdgeMesh::BuildAdjacencyListForRange(
 
 void HalfEdgeMesh::HalfEdgeMeshSplitterRecursive(
     size_t startIdx,
-    size_t endIdx,
-    bool isParentClusterGroup = false
+    size_t endIdx
 ) {
     if (startIdx >= endIdx) { return; }
     
@@ -49,11 +92,6 @@ void HalfEdgeMesh::HalfEdgeMeshSplitterRecursive(
     if (numElements <= MAX_TRI_IN_CLUSTER) {
         m_clusterOffsets.push_back(startIdx);
         return;
-    }
-
-    if (!isParentClusterGroup && numElements <= MAX_TRI_IN_CLUSTERGROUP) {
-        m_clusterGroupOffsets.push_back(startIdx);
-        isParentClusterGroup = true;
     }
 
     std::vector<std::vector<size_t>> adjacencyList;
@@ -111,17 +149,29 @@ void HalfEdgeMesh::HalfEdgeMeshSplitterRecursive(
 
     size_t midIdx = part0ptr;
 
-    HalfEdgeMeshSplitterRecursive(startIdx, midIdx - 1, isParentClusterGroup);
-    HalfEdgeMeshSplitterRecursive(midIdx, endIdx, isParentClusterGroup);
+    HalfEdgeMeshSplitterRecursive(startIdx, midIdx - 1);
+    HalfEdgeMeshSplitterRecursive(midIdx, endIdx);
 }
 
 void HalfEdgeMesh::HalfEdgeMeshSplitter() {
+    m_clusterOffsets.clear();
+    auto start = std::chrono::high_resolution_clock::now();
     HalfEdgeMeshSplitterRecursive(0, m_faces.size() - 1);
+    auto end = std::chrono::high_resolution_clock::now();
+    std::cout << "Mesh Partitioning Time: " << std::chrono::duration_cast<std::chrono::seconds>(end - start).count() << "s" << std::endl;
+
+    start = std::chrono::high_resolution_clock::now();
+    std::vector<std::vector<size_t>> adjacencyList;
+    BuildAdjacencyListForCluster(adjacencyList);
+    ClusterGrouper(adjacencyList, m_clusterGroupResult, m_clusterGroupCount);
+    end = std::chrono::high_resolution_clock::now();
+    std::cout << "Cluster Grouping Time: " << std::chrono::duration_cast<std::chrono::seconds>(end - start).count() << "s" << std::endl;
 }
 
 void HalfEdgeMesh::partition_loop(){
 
     HalfEdgeMeshSplitter();
+
 }
 
 
@@ -271,7 +321,9 @@ void EMesh::eMeshSplitter() {
     std::cout << "Mesh Partitioning Time: " << std::chrono::duration_cast<std::chrono::seconds>(end - start).count() << "s" << std::endl;
 
     start = std::chrono::high_resolution_clock::now();
-    eMeshClusterGrouper();
+    std::vector<std::vector<size_t>> adjacencyList;
+    buildAdjacencyListForCluster(adjacencyList);
+    ClusterGrouper(adjacencyList, m_clusterGroupResult, m_clusterGroupCount);
     end = std::chrono::high_resolution_clock::now();
     std::cout << "Cluster Grouping Time: " << std::chrono::duration_cast<std::chrono::seconds>(end - start).count() << "s" << std::endl;
 
@@ -312,10 +364,12 @@ void EMesh::buildAdjacencyListForCluster(
     }
 }
 
-void EMesh::eMeshClusterGrouper() {
-    std::vector<std::vector<size_t>> adjacencyList;
-    buildAdjacencyListForCluster(adjacencyList);
-
+void ClusterGrouper(
+    const std::vector<std::vector<size_t>>& adjacencyList,
+    std::vector<size_t>&  clusterGroupResult,
+    int& clusterGroupCount
+) 
+{
     idx_t numClusters = adjacencyList.size();
 
     std::vector<idx_t> xadj(numClusters + 1, 0);
@@ -363,10 +417,10 @@ void EMesh::eMeshClusterGrouper() {
         return;
     }
 
-    m_clusterGroupResult.clear();
-    m_clusterGroupResult.reserve(numClusters);
+    clusterGroupResult.clear();
+    clusterGroupResult.reserve(numClusters);
     for (size_t i = 0; i < numClusters; ++i) {
-        m_clusterGroupResult.push_back(partitionResult[i]);
+        clusterGroupResult.push_back(partitionResult[i]);
     }
-    m_clusterGroupCount = numParts;
+    clusterGroupCount = numParts;
 }

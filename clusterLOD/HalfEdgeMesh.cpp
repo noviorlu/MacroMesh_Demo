@@ -3,123 +3,13 @@
  //#define DEBUG_HALFEDGEMESH
 #include <fstream>
 #include <sstream>
+#include <filesystem>
 #include <unordered_map>
 #include <unordered_set>
 #include <iostream>
 #include <glm/gtx/string_cast.hpp>
 #include "cs488-framework/ObjFileDecoder.hpp"
 
-HalfEdgeMesh::HalfEdgeMesh(const std::string& objFilePath) {
-    std::string objectName;
-    std::vector<glm::vec3> positions;
-    std::vector<glm::vec3> normals;
-    std::vector<glm::vec2> uvCoords;
-	ObjFileDecoder::decode(objFilePath.c_str(), objectName, positions, normals, uvCoords);
-
-	std::unordered_map<glm::vec3, HalfVertex*> vertexMap;
-	std::unordered_map<std::pair<HalfVertex*, HalfVertex*>, HalfEdge*> edgeMap;
-	for (size_t i = 0; i < positions.size(); i+=3) {
-        HalfVertex* vertex0;
-        HalfVertex* vertex1;
-        HalfVertex* vertex2;
-        if (vertexMap.find(positions[i]) != vertexMap.end()) vertex0 = vertexMap[positions[i]];
-        else {
-			if (uvCoords.size() > 0) vertex0 = new HalfVertex(positions[i], normals[i], uvCoords[i]);
-			else vertex0 = new HalfVertex(positions[i], normals[i], glm::vec2(0.0f));
-            vertexMap[positions[i]] = vertex0;
-        }
-		if (vertexMap.find(positions[i + 1]) != vertexMap.end()) vertex1 = vertexMap[positions[i + 1]];
-		else {
-            if (uvCoords.size() > 0) vertex1 = new HalfVertex(positions[i + 1], normals[i + 1], uvCoords[i + 1]);
-			else vertex1 = new HalfVertex(positions[i + 1], normals[i + 1], glm::vec2(0.0f));
-			vertexMap[positions[i + 1]] = vertex1;
-		}
-		if (vertexMap.find(positions[i + 2]) != vertexMap.end()) vertex2 = vertexMap[positions[i + 2]];
-		else {
-            if (uvCoords.size() > 0) vertex2 = new HalfVertex(positions[i + 2], normals[i + 2], uvCoords[i + 2]);
-			else vertex2 = new HalfVertex(positions[i + 2], normals[i + 2], glm::vec2(0.0f));
-			vertexMap[positions[i + 2]] = vertex2;
-		}
-
-		assert(edgeMap.find({ vertex0, vertex1 }) == edgeMap.end());
-		assert(edgeMap.find({ vertex1, vertex2 }) == edgeMap.end());
-		assert(edgeMap.find({ vertex2, vertex0 }) == edgeMap.end());
-
-        HalfEdge* edge0 = new HalfEdge();
-        HalfEdge* edge1 = new HalfEdge();
-        HalfEdge* edge2 = new HalfEdge();
-		edgeMap[{vertex0, vertex1}] = edge0;
-		edgeMap[{vertex1, vertex2}] = edge1;
-		edgeMap[{vertex2, vertex0}] = edge2;
-
-		Face* face = new Face(edge0);
-        edge0->face = face;
-        edge1->face = face;
-        edge2->face = face;
-		m_faces.push_back(face);
-
-		edge0->origin = vertex0;
-		edge1->origin = vertex1;
-		edge2->origin = vertex2;
-
-        vertex0->edge = edge0;
-        vertex1->edge = edge1;
-        vertex2->edge = edge2;
-
-        if (edgeMap.find({ vertex1, vertex0 }) != edgeMap.end()) {
-			edge0->twin = edgeMap[{vertex1, vertex0}];
-			edgeMap[{vertex1, vertex0}]->twin = edge0;
-        }
-		if (edgeMap.find({ vertex2, vertex1 }) != edgeMap.end()) {
-			edge1->twin = edgeMap[{vertex2, vertex1}];
-			edgeMap[{vertex2, vertex1}]->twin = edge1;
-		}
-		if (edgeMap.find({ vertex0, vertex2 }) != edgeMap.end()) {
-			edge2->twin = edgeMap[{vertex0, vertex2}];
-			edgeMap[{vertex0, vertex2}]->twin = edge2;
-		}
-
-		edge0->next = edge1;
-		edge1->next = edge2;
-		edge2->next = edge0;
-
-		edge0->prev = edge2;
-		edge1->prev = edge0;
-		edge2->prev = edge1;
-	}
-
-	for (auto& [vertexPair, edge] : edgeMap) {
-		m_edges.push_back(edge);
-	}
-	for (auto& [pos, vert] : vertexMap) {
-		m_vertices.push_back(vert);
-	}
-
-    // find all edges that doesnot have twin
-	std::unordered_map<HalfVertex*, HalfEdge*> startVertexToBoundaryEdge;
-    for (int i = m_edges.size()-1; i >= 0; --i) {
-		auto edge = m_edges[i];
-        if (edge->twin != nullptr) continue;
-        HalfEdge* twinEdge = new HalfEdge();
-
-        twinEdge->twin = edge;
-        edge->twin = twinEdge;
-
-        twinEdge->origin = edge->next->origin;
-
-        startVertexToBoundaryEdge[twinEdge->origin] = twinEdge;
-        m_edges.push_back(twinEdge);
-    }
-
-	for (auto& [vertex, edge] : startVertexToBoundaryEdge) {
-		HalfEdge* twinEdge = edge;
-		HalfEdge* nextEdge = startVertexToBoundaryEdge[edge->twin->origin];
-		
-		assert(nextEdge != nullptr);
-        twinEdge->next = nextEdge;
-		nextEdge->prev = twinEdge;
-	}
-}
 
 HalfEdgeMesh::HalfEdgeMesh(const Mesh& mesh) {
     m_faces.reserve(mesh.m_indexData.size() / 3);
@@ -236,6 +126,129 @@ HalfEdgeMesh::~HalfEdgeMesh() {
 	}
 }
 
+void HalfEdgeMesh::importMesh(const std::string& objFilePath) {
+    std::vector<glm::vec3> positions;
+    std::vector<glm::vec3> normals;
+    std::vector<glm::vec2> uvCoords;
+
+    auto starttime = std::chrono::high_resolution_clock::now();
+    ObjFileDecoder::decode(objFilePath.c_str(), m_name, positions, normals, uvCoords);
+
+    auto endtime = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = endtime - starttime;
+    std::cout << "Time taken to decode: " << elapsed.count() << "s" << std::endl;
+
+    starttime = std::chrono::high_resolution_clock::now();
+	std::unordered_map<glm::vec3, HalfVertex*> vertexMap;
+	std::unordered_map<std::pair<HalfVertex*, HalfVertex*>, HalfEdge*> edgeMap;
+	for (size_t i = 0; i < positions.size(); i+=3) {
+        HalfVertex* vertex0;
+        HalfVertex* vertex1;
+        HalfVertex* vertex2;
+        if (vertexMap.find(positions[i]) != vertexMap.end()) vertex0 = vertexMap[positions[i]];
+        else {
+			if (uvCoords.size() > 0) vertex0 = new HalfVertex(positions[i], normals[i], uvCoords[i]);
+			else vertex0 = new HalfVertex(positions[i], normals[i], glm::vec2(0.0f));
+            vertexMap[positions[i]] = vertex0;
+        }
+		if (vertexMap.find(positions[i + 1]) != vertexMap.end()) vertex1 = vertexMap[positions[i + 1]];
+		else {
+            if (uvCoords.size() > 0) vertex1 = new HalfVertex(positions[i + 1], normals[i + 1], uvCoords[i + 1]);
+			else vertex1 = new HalfVertex(positions[i + 1], normals[i + 1], glm::vec2(0.0f));
+			vertexMap[positions[i + 1]] = vertex1;
+		}
+		if (vertexMap.find(positions[i + 2]) != vertexMap.end()) vertex2 = vertexMap[positions[i + 2]];
+		else {
+            if (uvCoords.size() > 0) vertex2 = new HalfVertex(positions[i + 2], normals[i + 2], uvCoords[i + 2]);
+			else vertex2 = new HalfVertex(positions[i + 2], normals[i + 2], glm::vec2(0.0f));
+			vertexMap[positions[i + 2]] = vertex2;
+		}
+
+		assert(edgeMap.find({ vertex0, vertex1 }) == edgeMap.end());
+		assert(edgeMap.find({ vertex1, vertex2 }) == edgeMap.end());
+		assert(edgeMap.find({ vertex2, vertex0 }) == edgeMap.end());
+
+        HalfEdge* edge0 = new HalfEdge();
+        HalfEdge* edge1 = new HalfEdge();
+        HalfEdge* edge2 = new HalfEdge();
+		edgeMap[{vertex0, vertex1}] = edge0;
+		edgeMap[{vertex1, vertex2}] = edge1;
+		edgeMap[{vertex2, vertex0}] = edge2;
+
+		Face* face = new Face(edge0);
+        edge0->face = face;
+        edge1->face = face;
+        edge2->face = face;
+		m_faces.push_back(face);
+
+		edge0->origin = vertex0;
+		edge1->origin = vertex1;
+		edge2->origin = vertex2;
+
+        vertex0->edge = edge0;
+        vertex1->edge = edge1;
+        vertex2->edge = edge2;
+
+        if (edgeMap.find({ vertex1, vertex0 }) != edgeMap.end()) {
+			edge0->twin = edgeMap[{vertex1, vertex0}];
+			edgeMap[{vertex1, vertex0}]->twin = edge0;
+        }
+		if (edgeMap.find({ vertex2, vertex1 }) != edgeMap.end()) {
+			edge1->twin = edgeMap[{vertex2, vertex1}];
+			edgeMap[{vertex2, vertex1}]->twin = edge1;
+		}
+		if (edgeMap.find({ vertex0, vertex2 }) != edgeMap.end()) {
+			edge2->twin = edgeMap[{vertex0, vertex2}];
+			edgeMap[{vertex0, vertex2}]->twin = edge2;
+		}
+
+		edge0->next = edge1;
+		edge1->next = edge2;
+		edge2->next = edge0;
+
+		edge0->prev = edge2;
+		edge1->prev = edge0;
+		edge2->prev = edge1;
+	}
+
+	for (auto& [vertexPair, edge] : edgeMap) {
+		m_edges.push_back(edge);
+	}
+	for (auto& [pos, vert] : vertexMap) {
+		m_vertices.push_back(vert);
+	}
+
+    // find all edges that doesnot have twin
+	std::unordered_map<HalfVertex*, HalfEdge*> startVertexToBoundaryEdge;
+    for (int i = m_edges.size()-1; i >= 0; --i) {
+		auto edge = m_edges[i];
+        if (edge->twin != nullptr) continue;
+        HalfEdge* twinEdge = new HalfEdge();
+
+        twinEdge->twin = edge;
+        edge->twin = twinEdge;
+
+        twinEdge->origin = edge->next->origin;
+
+        startVertexToBoundaryEdge[twinEdge->origin] = twinEdge;
+        m_edges.push_back(twinEdge);
+    }
+
+	for (auto& [vertex, edge] : startVertexToBoundaryEdge) {
+		HalfEdge* twinEdge = edge;
+		HalfEdge* nextEdge = startVertexToBoundaryEdge[edge->twin->origin];
+		
+		assert(nextEdge != nullptr);
+        twinEdge->next = nextEdge;
+		nextEdge->prev = twinEdge;
+	}
+
+    std::cout << "Imported EMesh from " << objFilePath << std::endl;
+    endtime = std::chrono::high_resolution_clock::now();
+    elapsed = endtime - starttime;
+    std::cout << "Time taken to import: " << elapsed.count() << "s" << std::endl;
+}
+
 void HalfEdgeMesh::exportMesh(Mesh& mesh) {
     mesh.m_vertexData.clear();
     mesh.m_indexData.clear();
@@ -293,18 +306,79 @@ void HalfEdgeMesh::exportMesh(std::vector<Cluster>& clusters, std::vector<Cluste
         clusters.push_back(std::move(cluster));
     }
 
-    for (size_t i = 0; i < m_clusterGroupOffsets.size(); ++i) {
-        size_t startCluster = m_clusterGroupOffsets[i];
-        size_t endCluster = (i + 1 < m_clusterGroupOffsets.size()) ? m_clusterGroupOffsets[i + 1] : clusters.size();
 
-        ClusterGroup group(0.0f);
-        for (size_t clusterIdx = startCluster; clusterIdx < endCluster; ++clusterIdx) {
-            group.clusters.push_back(&clusters[clusterIdx]);
-        }
+    std::unordered_map<int, float> clusterGroupClr;
+	for (size_t i = 0; i < m_clusterGroupResult.size(); ++i) {
+		int group = m_clusterGroupResult[i];
+		if (clusterGroupClr.find(group) == clusterGroupClr.end()) {
+            clusterGroupClr[group] = static_cast<float>(rand()) / RAND_MAX;
+		}
+	}
 
-        clusterGroups.push_back(std::move(group));
+    for (int i = 0; i < clusters.size(); i++) {
+        float s = 0.8f;
+        float v = 0.5f + static_cast<float>(rand()) / (2.0f * RAND_MAX);
+		clusters[i].rdColor = HSVtoRGB(clusterGroupClr[m_clusterGroupResult[i]], s, v);
     }
 }
+
+void HalfEdgeMesh::exportMeshToObjFiles(const std::string& folderPath) {
+    if (!std::filesystem::exists(folderPath)) {
+        std::filesystem::create_directories(folderPath);
+    }
+
+    std::unordered_map<int, std::vector<Face*>> clusterGroupMap;
+
+    for (size_t i = 0; i < m_clusterOffsets.size() - 1; ++i) {
+        size_t startIdx = m_clusterOffsets[i];
+        size_t endIdx = m_clusterOffsets[i + 1];
+        int group = m_clusterGroupResult[i];
+
+        for (size_t j = startIdx; j < endIdx; ++j) {
+            clusterGroupMap[group].push_back(m_faces[j]);
+        }
+    }
+
+    for (const auto& [group, faces] : clusterGroupMap) {
+        std::string fileName = folderPath + "/clusterGroup_" + std::to_string(group) + ".obj";
+        std::ofstream outFile(fileName);
+
+        if (!outFile.is_open()) {
+            std::cerr << "Failed to open file: " << fileName << std::endl;
+            continue;
+        }
+
+        std::unordered_map<HalfVertex*, size_t> vertexMap;
+        size_t vertexIndex = 1;
+
+        for (const auto& face : faces) {
+            const HalfEdge* edge = face->edge;
+            do {
+                HalfVertex* vertex = edge->origin;
+                if (vertexMap.find(vertex) == vertexMap.end()) {
+                    vertexMap[vertex] = vertexIndex++;
+                    outFile << "v " << vertex->position.x << " " << vertex->position.y << " " << vertex->position.z << "\n";
+                }
+                edge = edge->next;
+            } while (edge != face->edge);
+        }
+
+        for (const auto& face : faces) {
+            outFile << "f";
+            const HalfEdge* edge = face->edge;
+            do {
+                outFile << " " << vertexMap[edge->origin];
+                edge = edge->next;
+            } while (edge != face->edge);
+            outFile << "\n";
+        }
+
+        outFile.close();
+        std::cout << "Exported clusterGroup " << group << " to " << fileName << std::endl;
+    }
+}
+
+
 
 void HalfEdgeMesh::exportMesh(const std::string& objFilePath) {
     std::ofstream objFile(objFilePath);
@@ -560,6 +634,9 @@ void HalfEdgeMesh::HalfEdgeMeshPrint() {
 
 
 
+
+
+
 void EMesh::importEMesh(const std::string& objFilePath) {
     std::vector<glm::vec3> positions;
     std::vector<glm::vec3> normals;
@@ -690,6 +767,56 @@ void EMesh::exportEMesh(const std::string& objFilePath) {
     outFile.close();
 }
 
+void EMesh::exportEMeshToObjFiles(const std::string& folderPath) {
+    if (!std::filesystem::exists(folderPath)) {
+        std::filesystem::create_directories(folderPath);
+    }
+
+    std::unordered_map<int, std::vector<EFace*>> clusterGroupMap;
+
+    for (size_t i = 0; i < m_clusterOffsets.size() - 1; ++i) {
+        size_t startIdx = m_clusterOffsets[i];
+        size_t endIdx = m_clusterOffsets[i + 1];
+        int group = m_clusterGroupResult[i];
+
+        for (size_t j = startIdx; j < endIdx; ++j) {
+            clusterGroupMap[group].push_back(m_faces[j]);
+        }
+    }
+
+    for (const auto& [group, faces] : clusterGroupMap) {
+        std::string fileName = folderPath + "/clusterGroup_" + std::to_string(group) + ".obj";
+        std::ofstream outFile(fileName);
+
+        if (!outFile.is_open()) {
+            std::cerr << "Failed to open file: " << fileName << std::endl;
+            continue;
+        }
+
+        std::unordered_map<EVertex*, size_t> vertexMap;
+        size_t vertexIndex = 1;
+        for (const auto& face : faces) {
+            for (const auto& vertex : face->vertices) {
+                if (vertexMap.find(vertex) == vertexMap.end()) {
+                    vertexMap[vertex] = vertexIndex++;
+                    outFile << "v " << vertex->position.x << " " << vertex->position.y << " " << vertex->position.z << "\n";
+                }
+            }
+        }
+
+        for (const auto& face : faces) {
+            outFile << "f";
+            for (const auto& vertex : face->vertices) {
+                outFile << " " << vertexMap[vertex];
+            }
+            outFile << "\n";
+        }
+
+        outFile.close();
+        std::cout << "Exported clusterGroup " << group << " to " << fileName << std::endl;
+    }
+}
+
 void EMesh::exportEMesh(std::vector<Cluster>& clusters, std::vector<ClusterGroup>& clusterGroups) {
     clusters.clear();
     clusterGroups.clear();
@@ -720,18 +847,32 @@ void EMesh::exportEMesh(std::vector<Cluster>& clusters, std::vector<ClusterGroup
         clusters.push_back(std::move(cluster));
     }
 
-    clusterGroups.reserve(m_clusterGroupCount);
-    for(int i = 0; i < m_clusterGroupCount; ++i) {
-        ClusterGroup group(0.0f);
-        clusterGroups.push_back(std::move(group));
-    }
-    for(int i = 0; i < clusters.size(); ++i) {
-        clusterGroups[m_clusterGroupResult[i]].clusters.push_back(&clusters[i]);
+    std::unordered_map<int, float> clusterGroupClr;
+	for (size_t i = 0; i < m_clusterGroupResult.size(); ++i) {
+		int group = m_clusterGroupResult[i];
+		if (clusterGroupClr.find(group) == clusterGroupClr.end()) {
+            clusterGroupClr[group] = static_cast<float>(rand()) / RAND_MAX;
+		}
+	}
+
+    for (int i = 0; i < clusters.size(); i++) {
+        float s = 0.8f;
+        float v = 0.5f + static_cast<float>(rand()) / (2.0f * RAND_MAX);
+		clusters[i].rdColor = HSVtoRGB(clusterGroupClr[m_clusterGroupResult[i]], s, v);
     }
 
-    for (auto& group : clusterGroups) {
-        group.setGroupColor();
-    }
+    //clusterGroups.reserve(m_clusterGroupCount);
+    //for(int i = 0; i < m_clusterGroupCount; ++i) {
+    //    ClusterGroup group(0.0f);
+    //    clusterGroups.push_back(std::move(group));
+    //}
+    //for(int i = 0; i < clusters.size(); ++i) {
+    //    clusterGroups[m_clusterGroupResult[i]].clusters.push_back(&clusters[i]);
+    //}
+
+    //for (auto& group : clusterGroups) {
+    //    group.setGroupColor();
+    //}
 }
 
 void EMesh::validate(){

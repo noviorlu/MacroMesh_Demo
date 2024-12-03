@@ -80,6 +80,13 @@ void clusterLOD::init()
  //           // ("../../models/dragon/dragon.obj")
  //       }
    );
+	HalfEdgeMesh heMesh;
+	heMesh.importMesh(ModelFilePath + "bunny/bunny.obj");
+	heMesh.HalfEdgeMeshSplitter();
+	Mesh::s_meshInfoMap[heMesh.m_name] = m_meshConsolidator;
+	heMesh.exportMesh(m_meshConsolidator->m_clusterList, m_meshConsolidator->m_clusterGroupList);
+	heMesh.exportMeshToObjFiles(ModelFilePath + "bunny/LOD");
+
 
 	//HalfEdgeMesh* halfEdgeMesh = new HalfEdgeMesh(ModelFilePath + "suzanne.obj");
 	// halfEdgeMesh->partition_loop();
@@ -88,15 +95,15 @@ void clusterLOD::init()
 	//halfEdgeMesh->exportMesh(((ModelFilePath + "suzanne_QEM.obj").c_str()));
 	// halfEdgeMesh->exportMesh(*m_meshConsolidator);
 
-	EMesh eMesh;
-	eMesh.importEMesh(ModelFilePath + "bunny/bunny.obj");
-	eMesh.eMeshSplitter();
-
-	Mesh::s_meshInfoMap[eMesh.m_name] = m_meshConsolidator;
-	eMesh.exportEMesh(m_meshConsolidator->m_clusterList, m_meshConsolidator->m_clusterGroupList);
-	eMesh.QEM(0.5);
-	eMesh.exportEMesh(ModelFilePath + "bunny_EClustered.obj");
-	exit(0);
+	//EMesh eMesh;
+	//eMesh.importEMesh(ModelFilePath + "bunny/bunny.obj");
+	//eMesh.eMeshSplitter();
+	//eMesh.exportEMeshToObjFiles(ModelFilePath + "bunny/LOD");
+	//Mesh::s_meshInfoMap[eMesh.m_name] = m_meshConsolidator;
+	//eMesh.exportEMesh(m_meshConsolidator->m_clusterList, m_meshConsolidator->m_clusterGroupList);
+	 //eMesh.QEM(0.5);
+	// eMesh.exportEMesh(ModelFilePath + "bunny_EClustered.obj");
+	//exit(0);
 	
 	// print triangle count
 	// MeshSplitter(*m_meshConsolidator);
