@@ -92,9 +92,9 @@ void clusterLOD::init()
 	// halfEdgeMesh->exportMesh(*m_meshConsolidator);
 
 	EMesh eMesh;
-	eMesh.importEMesh(ModelFilePath + "suzanne.obj");
+	eMesh.importEMesh(ModelFilePath + "bunny/bunny.obj");
 	eMesh.QEM(0.5);
-	eMesh.exportEMesh(ModelFilePath + "suzanne_E.obj");
+	eMesh.exportEMesh(ModelFilePath + "bunny_E.obj");
 
 	exit(0);
 	

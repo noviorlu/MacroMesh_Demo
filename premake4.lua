@@ -34,11 +34,11 @@ if PLATFORM == "windows" then
 end
 
 -- GLFW 静态库生成
-if PLATFORM == "windows" and not os.isfile("lib/glfw3.lib") then
-    os.execute("cmake -S shared/glfw-3.3.8 -B shared/glfw-3.3.8/build -G \"Visual Studio 16 2019\" -A x64")
-    os.execute("cmake --build shared/glfw-3.3.8/build --config Release")
-    os.execute("copy shared\\glfw-3.3.8\\build\\src\\Release\\glfw3.lib lib\\glfw3.lib")
-end
+-- if PLATFORM == "windows" and not os.isfile("lib/glfw3.lib") then
+--     os.execute("cmake -S shared/glfw-3.3.8 -B shared/glfw-3.3.8/build -G \"Visual Studio 16 2019\" -A x64")
+--     os.execute("cmake --build shared/glfw-3.3.8/build --config Release")
+--     os.execute("copy shared\\glfw-3.3.8\\build\\src\\Release\\glfw3.lib lib\\glfw3.lib")
+-- end
 
 -- Lua 静态库生成
 if PLATFORM == "windows" and not os.isfile("lib/lua.lib") then

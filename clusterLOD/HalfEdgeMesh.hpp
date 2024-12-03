@@ -9,6 +9,9 @@
 #include <array>
 #include <algorithm>
 
+#include <chrono>
+
+
 struct HalfVertex;
 struct HalfEdge;
 struct Face;
@@ -257,8 +260,8 @@ struct EEdge {
 		cost.val = 0.0f;
 		cost.optimalPosition = glm::vec3(0.0f);
     }
-    void computeEdgeCost();
 
+    void computeEdgeCost();
 };
 
 struct EFace {
@@ -269,6 +272,7 @@ struct EFace {
 		vertices[1] = v1;
 		vertices[2] = v2;
 	}
+    void updateFaceQuadric();
 };
 
 class EMesh {
@@ -287,8 +291,10 @@ public:
 	void importEMesh(const std::string& objFilePath);
 	void exportEMesh(const std::string& objFilePath);
     void QEM(float ratio);
-    void QEMHelper();
     void edgeCollapse(EEdge* edge);
+
+    int m_validFaces = 0;
+
     void validate();
     void print();
 };

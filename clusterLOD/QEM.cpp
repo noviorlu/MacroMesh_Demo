@@ -328,8 +328,9 @@ void EMesh::edgeCollapse(EEdge* edge){
         edge1->removeFace(face);
         edge2->removeFace(face);
         edge3->removeFace(face);
-
+        
         face->isValid = false;
+        m_validFaces--;
     }
     edge->isValid = false;
 
@@ -364,9 +365,63 @@ void EMesh::edgeCollapse(EEdge* edge){
         }
     }
 
+    std::unordered_set<EFace*> faces;
+    v1->quadric = glm::mat4(0.0f);
+    for(auto egde : v1->edges){
+        if(edge->vertices.v1 == v1) egde->vertices.v2->quadric = glm::mat4(0.0f);
+        else egde->vertices.v1->quadric = glm::mat4(0.0f);
+        for(auto& face : egde->faces){
+            faces.insert(face);
+        }
+    }
+
+    for(auto& face : faces){
+        face->updateFaceQuadric();
+    }
+
+    for(auto& edge : m_edges){
+        edge.second->computeEdgeCost();
+    }
+
 }
 
-void EMesh::QEMHelper() {
+void EFace::updateFaceQuadric(){
+    glm::mat4 Q = glm::mat4(0.0f);
+    glm::vec3 normal = glm::cross(
+        vertices[1]->position - vertices[0]->position, 
+        vertices[2]->position - vertices[0]->position
+    );
+    normal = glm::normalize(normal);
+    float d = -glm::dot(normal, vertices[0]->position);
+    glm::vec4 plane(normal, d);
+    Q = glm::outerProduct(plane, plane);
+    for (int i = 0; i < 3; ++i) {
+        vertices[i]->quadric += Q;
+    }
+}
+
+void EEdge::computeEdgeCost(){
+    EVertex* v1 = vertices.v1;
+    EVertex* v2 = vertices.v2;
+
+    glm::mat4 Q = v1->quadric + v2->quadric;
+
+    glm::mat4 Q_sub = Q;
+    Q_sub[3] = glm::vec4(0, 0, 0, 1);
+
+    glm::vec3 optimalPosition = (v1->position + v2->position) / 2.0f;
+
+    glm::vec4 v_opt(optimalPosition, 1.0f);
+    float costValue = glm::dot(v_opt, Q * v_opt);
+
+    costValue = glm::max(costValue, 0.0f);
+
+    cost = Cost{ costValue, optimalPosition };
+}
+
+
+void EMesh::QEM(float ratio){
+    auto start = std::chrono::high_resolution_clock::now();
 
     for(EVertex* vertex : m_vertices){
         vertex->quadric = glm::mat4(0.0f);
@@ -375,40 +430,13 @@ void EMesh::QEMHelper() {
     // calculate quadric for each vertex by loop through faces
     for (EFace* face : m_faces) {
         if (!face->isValid) continue;
-        glm::mat4 Q = glm::mat4(0.0f);
-        glm::vec3 normal = glm::cross(face->vertices[1]->position - face->vertices[0]->position, face->vertices[2]->position - face->vertices[0]->position);
-        normal = glm::normalize(normal);
-        float d = -glm::dot(normal, face->vertices[0]->position);
-        glm::vec4 plane(normal, d);
-        Q = glm::outerProduct(plane, plane);
-        for (int i = 0; i < 3; ++i) {
-            face->vertices[i]->quadric += Q;
-        }
+        face->updateFaceQuadric();
     }
 
     // calculate edge cost
     for (auto& [pair, edge] : m_edges) {
         if (!edge->isValid) continue;
-        EVertex* v1 = edge->vertices.v1;
-        EVertex* v2 = edge->vertices.v2;
-
-        if(edge->isBoundary){   
-            edge->cost = Cost{ std::numeric_limits<float>::max(), glm::vec3(0.0f) };
-            continue;
-        }
-
-        glm::mat4 Q = v1->quadric + v2->quadric;
-
-        glm::mat4 Q_sub = Q;
-        Q_sub[3] = glm::vec4(0, 0, 0, 1);
-
-        glm::vec3 optimalPosition = (v1->position + v2->position) / 2.0f;
-
-        glm::vec4 v_opt(optimalPosition, 1.0f);
-        float costValue = glm::dot(v_opt, Q * v_opt);
-
-        costValue = glm::max(costValue, 0.0f);
-        edge->cost = Cost{ costValue, optimalPosition };
+        edge->computeEdgeCost();
     }
 
     // create the priority queue and collapse the edges
@@ -417,20 +445,21 @@ void EMesh::QEMHelper() {
         pq.push(edge);
     }
 
-    EEdge* edge = pq.pop();
-    assert(edge != nullptr);
+    auto end = std::chrono::high_resolution_clock::now();
+    std::cout << "QEM Initialization Time: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
 
-    edgeCollapse(edge);
-}
+    start = std::chrono::high_resolution_clock::now();
+    m_validFaces = m_faces.size();
+    int targetFaces = m_validFaces * ratio;
+    int lastReportedFaceCount = m_validFaces;
 
-void EMesh::QEM(float ratio){
-    int validFaces = m_faces.size();
-    int targetFaces = validFaces * ratio;
-    while (validFaces > targetFaces) {
-        QEMHelper();
-        validFaces = 0;
-        for (auto& face : m_faces) {
-            if (face->isValid) validFaces++;
-        }
+    while (m_validFaces > targetFaces) {
+        if(m_validFaces % 1000 == 0)
+            std::cout << "Target Faces: " << targetFaces << ", Current Faces: " << m_validFaces << std::endl;
+        EEdge* edge = pq.pop();
+        edgeCollapse(edge);
     }
+
+    end = std::chrono::high_resolution_clock::now();
+    std::cout << "QEM Collapse Time: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
 }

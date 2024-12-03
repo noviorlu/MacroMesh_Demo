@@ -573,9 +573,24 @@ void EMesh::importEMesh(const std::string& objFilePath) {
     std::vector<glm::vec3> normals;
     std::vector<glm::vec2> uvCoords;
 
+    auto starttime = std::chrono::high_resolution_clock::now();
     ObjFileDecoder::decode(objFilePath.c_str(), objectName, positions, normals, uvCoords);
 
+    auto endtime = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = endtime - starttime;
+    std::cout << "Time taken to decode: " << elapsed.count() << "s" << std::endl;
+
+    starttime = std::chrono::high_resolution_clock::now();
+
     std::unordered_map<glm::vec3, EVertex*> vertexMap;
+
+    m_edges.clear();
+    m_faces.clear();
+    m_vertices.clear();
+
+    m_edges.reserve(positions.size());
+    m_faces.reserve(positions.size() / 3);
+    m_vertices.reserve(positions.size());
 
     auto getOrCreateVertex = [&](const glm::vec3& pos, const glm::vec3& norm, const glm::vec2& uv) -> EVertex* {
         if (vertexMap.find(pos) == vertexMap.end()) {
@@ -636,8 +651,10 @@ void EMesh::importEMesh(const std::string& objFilePath) {
         }
     }
 
-    // print();
-    validate();
+    std::cout << "Imported EMesh from " << objFilePath << std::endl;
+    endtime = std::chrono::high_resolution_clock::now();
+    elapsed = endtime - starttime;
+    std::cout << "Time taken to import: " << elapsed.count() << "s" << std::endl;
 }
 
 void EMesh::exportEMesh(const std::string& objFilePath) {
