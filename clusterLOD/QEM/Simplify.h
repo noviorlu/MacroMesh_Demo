@@ -31,6 +31,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstdio>
+#include <cmath>
 // [cs488-project end]
 
 #define loopi(start_l,end_l) for ( int i=start_l;i<end_l;++i )
@@ -329,7 +330,8 @@ namespace Simplify
 	std::vector<Ref> refs;
 	std::string mtllib;
 	std::vector<std::string> materials;
-
+	float total_error = 0.0;
+	int edgeCollapseCount = 0;
 	// Helper functions
 
 	double vertex_error(SymetricMatrix q, double x, double y, double z);
@@ -385,7 +387,7 @@ namespace Simplify
 
 			// target number of triangles reached ? Then break
 			if ((verbose) && (iteration%5==0)) {
-				printf("iteration %d - triangles %d threshold %g\n",iteration,triangle_count-deleted_triangles, threshold);
+				printf("iteration %d - triangles %d threshold %g total_error %g\n", iteration, triangle_count - deleted_triangles, threshold, total_error);
 			}
 
 			// remove vertices & mark deleted triangles
@@ -407,19 +409,24 @@ namespace Simplify
 					
 					// if (vertices[i0].border || vertices[i1].border) continue;
 					if (vertices[i0].border && vertices[i1].border) continue;
-
-
 					// [cs488-project end]
 
 					// Compute vertex to collapse to
 					vec3f p;
-					calculate_error(i0,i1,p);
+					//[cs488-project]: calcerror
+					double edge_err = calculate_error(i0,i1,p);
+					// [cs488-project end]
+
 					deleted0.resize(v0.tcount); // normals temporarily
 					deleted1.resize(v1.tcount); // normals temporarily
 					// don't remove if flipped
 					if( flipped(p,i0,i1,v0,v1,deleted0) ) continue;
 
 					if( flipped(p,i1,i0,v1,v0,deleted1) ) continue;
+
+					//[cs488-project]: calcerror
+					total_error += edge_err;
+					// [cs488-project end]
 
 					if ( (t.attr & TEXCOORD) == TEXCOORD  )
 					{
@@ -434,6 +441,8 @@ namespace Simplify
 
 					update_triangles(i0,v0,deleted0,deleted_triangles);
 					update_triangles(i0,v1,deleted1,deleted_triangles);
+
+					edgeCollapseCount++;
 
 					int tcount=refs.size()-tstart;
 

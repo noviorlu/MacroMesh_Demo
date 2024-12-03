@@ -1,8 +1,21 @@
 #include <metis.h>
+#include <filesystem>
 
 #include <queue>
 #include <iostream>
 #include <algorithm>
+#include <map>
+#include <fstream>
+#include <string>
+#include <sstream>
+#include <map>
+#include <cstdio>
+#include <cstdlib>
+#ifdef _WIN32
+#define popen _popen
+#define pclose _pclose
+#endif
+
 #include "HalfEdgeMesh.hpp"
 
 #define MAX_TRI_IN_CLUSTER 256
@@ -183,8 +196,141 @@ void HalfEdgeMesh::HalfEdgeMeshSplitter() {
 
 
 
+void ClusterGrouper(
+    const std::vector<std::vector<size_t>>& adjacencyList,
+    std::vector<size_t>&  clusterGroupResult,
+    int& clusterGroupCount
+) 
+{
+    idx_t numClusters = adjacencyList.size();
 
+    std::vector<idx_t> xadj(numClusters + 1, 0);
+    std::vector<idx_t> adjncy;
 
+    for (size_t i = 0; i < numClusters; ++i) {
+        xadj[i + 1] = xadj[i] + adjacencyList[i].size();
+        for (size_t neighbor : adjacencyList[i]) {
+            adjncy.push_back(static_cast<idx_t>(neighbor));
+        }
+    }
+
+    idx_t numParts = static_cast<idx_t>(
+        (numClusters + MAX_CLUSTER_IN_CLUSTERGROUP - 1) / MAX_CLUSTER_IN_CLUSTERGROUP
+    );
+    if (numParts > numClusters) {
+        numParts = numClusters;
+    }
+
+    idx_t ncon = 1;
+    std::vector<real_t> tpwgts(numParts * ncon, 1.0 / numParts);
+    std::vector<real_t> ubvec(ncon, 1.05);
+
+    std::vector<idx_t> partitionResult(numClusters, 0);
+    idx_t edgeCut;
+
+    int result = METIS_PartGraphKway(
+        &numClusters,
+        &ncon,
+        xadj.data(),
+        adjncy.data(),
+        NULL,
+        NULL,
+        NULL,
+        &numParts,
+        tpwgts.data(),
+        ubvec.data(),
+        NULL,
+        &edgeCut,
+        partitionResult.data()
+    );
+
+    if (result != METIS_OK) {
+        std::cerr << "METIS partitioning failed with error code: " << result << std::endl;
+        return;
+    }
+
+    clusterGroupResult.clear();
+    clusterGroupResult.reserve(numClusters);
+    for (size_t i = 0; i < numClusters; ++i) {
+        clusterGroupResult.push_back(partitionResult[i]);
+    }
+    clusterGroupCount = numParts;
+}
+
+void FastQEM(const std::string& lodFolder) {
+    std::vector<std::filesystem::path> objFiles;
+    for (const auto& entry : std::filesystem::directory_iterator(lodFolder)) {
+        if (entry.path().extension() == ".obj") {
+            objFiles.push_back(entry.path());
+        }
+    }
+
+    std::string simplifyExe = "C:/projects/MacroMesh_Demo/clusterLOD/QEM/simplify.exe";
+    std::string tempOutputFolder = lodFolder + "/Temp";
+    std::map<std::string, double> fileErrorMap;
+
+    std::filesystem::create_directory(tempOutputFolder);
+
+    #pragma omp parallel for
+    for (int i = 0; i < objFiles.size(); ++i) {
+        const auto& objFile = objFiles[i];
+        std::string inputPath = objFile.generic_string();
+        std::string tempOutputPath = (std::filesystem::path(tempOutputFolder) / objFile.filename()).generic_string();
+
+        std::string command = simplifyExe + " " + inputPath + " " + tempOutputPath + " 0.5";
+
+        std::cout << "Running: " << command << std::endl;
+
+        std::string output;
+        char buffer[128];
+        FILE* pipe = popen(command.c_str(), "r");
+        if (!pipe) {
+            std::cerr << "Error: failed to run command." << std::endl;
+            continue;
+        }
+
+        while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+            output += buffer;
+        }
+        pclose(pipe);
+
+        // 从输出中提取 Total error
+        std::istringstream stream(output);
+        std::string line;
+        double totalError = -1; // 默认值，表示未找到
+        while (std::getline(stream, line)) {
+            if (line.find("Total error:") != std::string::npos) {
+                std::istringstream lineStream(line);
+                std::string label;
+                lineStream >> label >> label >> totalError; // 跳过 "Total" 和 "error:"
+                break;
+            }
+        }
+
+        #pragma omp critical
+        {
+            if (totalError >= 0) {
+                fileErrorMap[objFile.filename().string()] = totalError;
+            } else {
+                std::cerr << "Warning: Total error not found for " << inputPath << std::endl;
+            }
+        }
+
+        try {
+            std::filesystem::rename(tempOutputPath, inputPath);
+        } catch (const std::exception& e) {
+            std::cerr << "Error replacing file " << inputPath << ": " << e.what() << std::endl;
+        }
+    }
+
+    std::filesystem::remove_all(tempOutputFolder);
+
+    // 输出文件名和对应的误差
+    std::cout << "File Errors:" << std::endl;
+    for (const auto& [filename, error] : fileErrorMap) {
+        std::cout << "File: " << filename << ", Total Error: " << error << std::endl;
+    }
+}
 
 
 
@@ -367,63 +513,3 @@ void EMesh::buildAdjacencyListForCluster(
     }
 }
 
-void ClusterGrouper(
-    const std::vector<std::vector<size_t>>& adjacencyList,
-    std::vector<size_t>&  clusterGroupResult,
-    int& clusterGroupCount
-) 
-{
-    idx_t numClusters = adjacencyList.size();
-
-    std::vector<idx_t> xadj(numClusters + 1, 0);
-    std::vector<idx_t> adjncy;
-
-    for (size_t i = 0; i < numClusters; ++i) {
-        xadj[i + 1] = xadj[i] + adjacencyList[i].size();
-        for (size_t neighbor : adjacencyList[i]) {
-            adjncy.push_back(static_cast<idx_t>(neighbor));
-        }
-    }
-
-    idx_t numParts = static_cast<idx_t>(
-        (numClusters + MAX_CLUSTER_IN_CLUSTERGROUP - 1) / MAX_CLUSTER_IN_CLUSTERGROUP
-    );
-    if (numParts > numClusters) {
-        numParts = numClusters;
-    }
-
-    idx_t ncon = 1;
-    std::vector<real_t> tpwgts(numParts * ncon, 1.0 / numParts);
-    std::vector<real_t> ubvec(ncon, 1.05);
-
-    std::vector<idx_t> partitionResult(numClusters, 0);
-    idx_t edgeCut;
-
-    int result = METIS_PartGraphKway(
-        &numClusters,
-        &ncon,
-        xadj.data(),
-        adjncy.data(),
-        NULL,
-        NULL,
-        NULL,
-        &numParts,
-        tpwgts.data(),
-        ubvec.data(),
-        NULL,
-        &edgeCut,
-        partitionResult.data()
-    );
-
-    if (result != METIS_OK) {
-        std::cerr << "METIS partitioning failed with error code: " << result << std::endl;
-        return;
-    }
-
-    clusterGroupResult.clear();
-    clusterGroupResult.reserve(numClusters);
-    for (size_t i = 0; i < numClusters; ++i) {
-        clusterGroupResult.push_back(partitionResult[i]);
-    }
-    clusterGroupCount = numParts;
-}

@@ -111,8 +111,8 @@ int simplify(const char* file_path, const char* export_path, float reduceFractio
 		return EXIT_FAILURE;
 	}
 
-	printf("Output: %zu vertices, %zu triangles (%f reduction; %.4f sec)\n",Simplify::vertices.size(), Simplify::triangles.size()
-		, (float)Simplify::triangles.size()/ (float) startSize  , ((float)(clock()-start))/CLOCKS_PER_SEC );
+	printf("Output: %zu vertices, %zu triangles (%f reduction; %.4f sec)\n", Simplify::vertices.size(), Simplify::triangles.size(), (float)Simplify::triangles.size() / (float)startSize, ((float)(clock() - start)) / CLOCKS_PER_SEC);
+	printf("Total error: %f\n", Simplify::total_error);
 	return EXIT_SUCCESS;
 }
 

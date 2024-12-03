@@ -77,7 +77,7 @@ void clusterLOD::init()
 	Mesh::s_meshInfoMap[heMesh.m_name] = m_meshConsolidator;
 	heMesh.exportMesh(m_meshConsolidator->m_clusterList, m_meshConsolidator->m_clusterGroupList);
 	heMesh.exportMeshToObjFiles(ModelFilePath + "bunny/LOD1");
-	
+	FastQEM(ModelFilePath + "bunny/LOD1");
 
 	// Acquire the MeshInfoMap from the Mesh.
 	m_meshConsolidator->uploadToGPU();

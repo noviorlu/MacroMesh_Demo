@@ -43,6 +43,7 @@ struct HalfVertex : public Vertex {
 
     std::vector<HalfVertex*> getAdjacentVertices();
 };
+
 struct HalfEdge {
 	bool isValid = true;
 
@@ -78,6 +79,7 @@ struct HashHalfEdge {
         return h1 ^ (h2 * 31);
     }
 };
+
 struct EqualHalfEdge {
     bool operator()(const HalfEdge* a, const HalfEdge* b) const {
         if (a == nullptr || b == nullptr) return false;
@@ -90,6 +92,7 @@ struct EqualHalfEdge {
         return (a1 == b1 && a2 == b2);
     }
 };
+
 struct CompareHalfEdgeCost {
     bool operator()(HalfEdge* a, HalfEdge* b) const {
         return a->cost.val < b->cost.val;
@@ -191,6 +194,20 @@ struct TripleHalfVertexEqual {
         return sortedLhs == sortedRhs;
     }
 };
+
+
+
+
+void ClusterGrouper(
+    const std::vector<std::vector<size_t>>& adjacencyList,
+    std::vector<size_t>& clusterGroupResult,
+    int& clusterGroupCount
+);
+
+void FastQEM(const std::string& lodFolder);
+
+
+
 
 
 
@@ -311,7 +328,6 @@ public:
     bool empty() const { return pq.empty(); }
 };
 
-
 class EMesh {
 public:
 	std::vector<EVertex*> m_vertices;
@@ -362,8 +378,3 @@ public:
 };
 
 
-void ClusterGrouper(
-    const std::vector<std::vector<size_t>>& adjacencyList,
-    std::vector<size_t>& clusterGroupResult,
-    int& clusterGroupCount
-);
