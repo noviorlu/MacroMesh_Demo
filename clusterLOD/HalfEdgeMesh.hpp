@@ -223,6 +223,7 @@ struct VertexPair {
 };
 
 struct EVertex : public Vertex {
+    bool isFakeBoundary = false;
     glm::mat4 quadric;
     std::unordered_set<EEdge*> edges;
     void addEdge(EEdge* edge) {edges.insert(edge);}

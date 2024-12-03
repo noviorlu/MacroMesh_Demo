@@ -409,9 +409,9 @@ void EMesh::edgeCollapse(EEdge* edge){
         face->updateFaceQuadric();
     }
 
-    for(auto& edge : m_edgeMap){
-        edge.second->computeEdgeCost();
-    }
+	for (auto& edge : v1->edges) {
+		edge->computeEdgeCost();
+	}
 
 }
 
@@ -440,12 +440,21 @@ void EEdge::computeEdgeCost(){
     EVertex* v1 = vertices.v1;
     EVertex* v2 = vertices.v2;
 
+    
+
     glm::mat4 Q = v1->quadric + v2->quadric;
 
     glm::mat4 Q_sub = Q;
     Q_sub[3] = glm::vec4(0, 0, 0, 1);
 
     glm::vec3 optimalPosition = (v1->position + v2->position) / 2.0f;
+    if(v1->isFakeBoundary){
+        optimalPosition = v1->position;
+    }
+    if(v2->isFakeBoundary){
+        optimalPosition = v2->position;
+    }
+
 
     glm::vec4 v_opt(optimalPosition, 1.0f);
     float costValue = glm::dot(v_opt, Q * v_opt);
@@ -496,6 +505,8 @@ void EMesh::QEM(float ratio){
 
                 if (groupIdx1 != groupIdx2) {
                     edge->isFakeBoundary = true;
+                    edge->vertices.v1->isFakeBoundary = true;
+                    edge->vertices.v2->isFakeBoundary = true;
                 } else {
                     clusterGroupQueues[groupIdx1].push(edge);
                 }
