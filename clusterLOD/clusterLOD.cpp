@@ -94,9 +94,9 @@ void clusterLOD::init()
 
 	Mesh::s_meshInfoMap[eMesh.m_name] = m_meshConsolidator;
 	eMesh.exportEMesh(m_meshConsolidator->m_clusterList, m_meshConsolidator->m_clusterGroupList);
-	// eMesh.QEM(0.5);
-	// eMesh.exportEMesh(ModelFilePath + "bunny_E.obj");
-	// exit(0);
+	eMesh.QEM(0.5);
+	eMesh.exportEMesh(ModelFilePath + "bunny_EClustered.obj");
+	exit(0);
 	
 	// print triangle count
 	// MeshSplitter(*m_meshConsolidator);

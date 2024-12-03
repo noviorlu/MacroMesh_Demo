@@ -362,15 +362,11 @@ void EMesh::eMeshClusterGrouper() {
         std::cerr << "METIS partitioning failed with error code: " << result << std::endl;
         return;
     }
-    m_clusterGroup.clear();
-    m_clusterGroup.resize(numParts);
 
-    for (size_t clusterIdx = 0; clusterIdx < partitionResult.size(); ++clusterIdx) {
-        idx_t groupIdx = partitionResult[clusterIdx];
-        if (groupIdx >= m_clusterGroup.size()) {
-            std::cerr << "Error: groupIdx out of range: " << groupIdx << std::endl;
-            return;
-        }
-        m_clusterGroup[groupIdx].push_back(clusterIdx);
+    m_clusterGroupResult.clear();
+    m_clusterGroupResult.reserve(numClusters);
+    for (size_t i = 0; i < numClusters; ++i) {
+        m_clusterGroupResult.push_back(partitionResult[i]);
     }
+    m_clusterGroupCount = numParts;
 }

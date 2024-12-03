@@ -6,6 +6,7 @@
 
 #include <queue>
 #include <unordered_set>
+#include <vector>
 #include <array>
 #include <algorithm>
 
@@ -241,6 +242,7 @@ struct EEdge {
     bool isDirty = false; // for piority Queue Lazy deletion & reinsert
 	bool isValid = true;
     bool isBoundary = false;
+    bool isFakeBoundary = false;
 	VertexPair vertices;
 	std::unordered_set<EFace*> faces; // should be size of 2, might have cases where Face back to back thus Face size of 4
     
@@ -279,6 +281,33 @@ struct EFace {
     std::vector<EFace*> adjacentFaces; // at most 3, for partition propose
 };
 
+class EEdgePriorityQueue {
+    struct EEdgeCompare {
+        bool operator()(const EEdge* lhs, const EEdge* rhs) const {
+            return lhs->cost.val > rhs->cost.val;
+        }
+    };
+    std::priority_queue<EEdge*, std::vector<EEdge*>, EEdgeCompare> pq;
+public:
+    void push(EEdge* edge) { pq.push(edge); }
+    EEdge* pop() {
+        while (!pq.empty()) {
+            EEdge* topEdge = pq.top();
+            pq.pop();
+            if (!topEdge->isValid) continue;
+            if (topEdge->isDirty) {
+                topEdge->isDirty = false;
+                push(topEdge);
+                continue;
+            }
+            return topEdge;
+        }
+        return nullptr;
+    }
+    bool empty() const { return pq.empty(); }
+};
+
+
 class EMesh {
 public:
 	std::vector<EVertex*> m_vertices;
@@ -315,42 +344,16 @@ public:
 
     void eMeshSplitter();
     std::vector<size_t> m_clusterOffsets;
-    std::vector<std::vector<size_t>> m_clusterGroup;
+    std::vector<size_t> m_clusterGroupResult; // same size as m_clusterOffsets
+    int m_clusterGroupCount = 0;
 
 public:
     void QEM(float ratio);
     void edgeCollapse(EEdge* edge);
-
     int m_validFaces = 0;
 
 public:
     void validate();
     void print();
-};
-
-class EEdgePriorityQueue {
-    struct EEdgeCompare {
-        bool operator()(const EEdge* lhs, const EEdge* rhs) const {
-            return lhs->cost.val > rhs->cost.val;
-        }
-    };
-    std::priority_queue<EEdge*, std::vector<EEdge*>, EEdgeCompare> pq;
-public:
-    void push(EEdge* edge) { pq.push(edge); }
-    EEdge* pop() {
-        while (!pq.empty()) {
-            EEdge* topEdge = pq.top();
-            pq.pop();
-            if (!topEdge->isValid) continue;
-            if (topEdge->isDirty) {
-                topEdge->isDirty = false;
-                push(topEdge);
-                continue;
-            }
-            return topEdge;
-        }
-        return nullptr;
-    }
-    bool empty() const { return pq.empty(); }
 };
 

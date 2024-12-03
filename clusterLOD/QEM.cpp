@@ -5,6 +5,7 @@
 #include <iostream>
 #include <algorithm>
 #include <iterator>
+#include <thread>
 
 #include <glm/gtx/string_cast.hpp>
 
@@ -304,7 +305,37 @@ void HalfEdgeMesh::QEM(){
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+void processClusterGroup(
+    EEdgePriorityQueue& pq,
+    int& faceCount,
+    int targetFaceCount,
+    EMesh* mesh
+);
+void parallelProcessClusterGroups(
+    std::vector<EEdgePriorityQueue>& clusterGroupQueues,
+    std::vector<int>& clusterGroupFaceCount,
+    const std::vector<int>& clusterGroupTargetFaceCount,
+    EMesh* mesh
+);
+
 void EMesh::edgeCollapse(EEdge* edge){
+    if(edge->isBoundary || edge->isFakeBoundary){
+        edge->isDirty = true;
+        return;
+    }
+
     // merging v2 into v1 of edge
     EVertex* v1 = edge->vertices.v1;
     EVertex* v2 = edge->vertices.v2;
@@ -330,7 +361,6 @@ void EMesh::edgeCollapse(EEdge* edge){
         edge3->removeFace(face);
         
         face->isValid = false;
-        m_validFaces--;
     }
     edge->isValid = false;
 
@@ -401,6 +431,12 @@ void EFace::updateFaceQuadric(){
 }
 
 void EEdge::computeEdgeCost(){
+    
+    if(isBoundary || isFakeBoundary){
+        cost = Cost{ std::numeric_limits<float>::infinity(), glm::vec3(0.0f) };
+        return;
+    }
+
     EVertex* v1 = vertices.v1;
     EVertex* v2 = vertices.v2;
 
@@ -419,7 +455,6 @@ void EEdge::computeEdgeCost(){
     cost = Cost{ costValue, optimalPosition };
 }
 
-
 void EMesh::QEM(float ratio){
     auto start = std::chrono::high_resolution_clock::now();
 
@@ -428,9 +463,10 @@ void EMesh::QEM(float ratio){
     }
 
     // calculate quadric for each vertex by loop through faces
-    for (EFace* face : m_faces) {
-        if (!face->isValid) continue;
-        face->updateFaceQuadric();
+    std::unordered_map<const EFace*, size_t> faceToIndexMap;
+    for (size_t i = 0; i < m_faces.size(); ++i) {
+        faceToIndexMap[m_faces[i]] = i;
+        m_faces[i]->updateFaceQuadric();
     }
 
     // calculate edge cost
@@ -439,27 +475,96 @@ void EMesh::QEM(float ratio){
         edge->computeEdgeCost();
     }
 
-    // create the priority queue and collapse the edges
-    EEdgePriorityQueue pq;
-    for (auto& [pair, edge] : m_edgeMap) {
-        pq.push(edge);
+    std::vector<EEdgePriorityQueue> clusterGroupQueues(m_clusterGroupCount);
+    auto findClusterIndex = [this](int faceIdx) -> size_t {
+        auto it = std::upper_bound(m_clusterOffsets.begin(), m_clusterOffsets.end(), faceIdx);
+        return (it == m_clusterOffsets.begin()) ? 0 : (it - m_clusterOffsets.begin() - 1);
+    };
+    for (auto& edgePair : m_edgeMap) {
+        EEdge* edge = edgePair.second;
+        if (edge && edge->faces.size() == 2) {
+            auto it = edge->faces.begin();
+            EFace* face1 = *it++;
+            EFace* face2 = *it;
+            
+            if (face1 && face2) {
+                size_t clusterIdx1 = findClusterIndex(faceToIndexMap[face1]);
+                size_t clusterIdx2 = findClusterIndex(faceToIndexMap[face2]);
+
+                size_t groupIdx1 = m_clusterGroupResult[clusterIdx1];
+                size_t groupIdx2 = m_clusterGroupResult[clusterIdx2];
+
+                if (groupIdx1 != groupIdx2) {
+                    edge->isFakeBoundary = true;
+                } else {
+                    clusterGroupQueues[groupIdx1].push(edge);
+                }
+            }
+        }
+    }
+
+    std::vector<int> clusterGroupFaceCount(m_clusterGroupCount, 0);
+    std::vector<int> clusterGroupTargetFaceCount(m_clusterGroupCount, 0);
+    for (int i = 0; i < m_clusterOffsets.size(); i++) {
+        if (i + 1 < m_clusterOffsets.size()) {
+            clusterGroupFaceCount[m_clusterGroupResult[i]] += m_clusterOffsets[i + 1] - m_clusterOffsets[i];
+        } else {
+            clusterGroupFaceCount[m_clusterGroupResult[i]] += m_faces.size() - m_clusterOffsets[i];
+        }
+    }
+    for (int i = 0; i < m_clusterGroupCount; i++) {
+        clusterGroupTargetFaceCount[i] = clusterGroupFaceCount[i] * ratio;
     }
 
     auto end = std::chrono::high_resolution_clock::now();
-    std::cout << "QEM Initialization Time: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
+    std::cout << "QEM Initialization Time: " << std::chrono::duration_cast<std::chrono::seconds>(end - start).count() << "s" << std::endl;
 
     start = std::chrono::high_resolution_clock::now();
-    m_validFaces = m_faces.size();
-    int targetFaces = m_validFaces * ratio;
-    int lastReportedFaceCount = m_validFaces;
 
-    while (m_validFaces > targetFaces) {
-        if(m_validFaces % 1000 == 0)
-            std::cout << "Target Faces: " << targetFaces << ", Current Faces: " << m_validFaces << std::endl;
-        EEdge* edge = pq.pop();
-        edgeCollapse(edge);
-    }
+    parallelProcessClusterGroups(clusterGroupQueues, clusterGroupFaceCount, clusterGroupTargetFaceCount, this);
 
     end = std::chrono::high_resolution_clock::now();
-    std::cout << "QEM Collapse Time: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
+    std::cout << "QEM Collapse Time: " << std::chrono::duration_cast<std::chrono::seconds>(end - start).count() << "s" << std::endl;
+}
+
+void processClusterGroup(
+    EEdgePriorityQueue& pq,
+    int& faceCount,
+    int targetFaceCount,
+    EMesh* mesh
+) {
+    while (faceCount > targetFaceCount) {
+        if (faceCount % 1000 == 0) {
+            std::cout << "Target Faces: " << targetFaceCount
+                      << ", Current Faces: " << faceCount << std::endl;
+        }
+
+        EEdge* edge = pq.pop();
+        if (edge) {
+            mesh->edgeCollapse(edge);
+            faceCount--;
+        }
+    }
+}
+
+void parallelProcessClusterGroups(
+    std::vector<EEdgePriorityQueue>& clusterGroupQueues,
+    std::vector<int>& clusterGroupFaceCount,
+    const std::vector<int>& clusterGroupTargetFaceCount,
+    EMesh* mesh
+) {
+    std::vector<std::thread> threads;
+
+    for (size_t i = 0; i < clusterGroupQueues.size(); ++i) {
+        threads.emplace_back(processClusterGroup,
+                             std::ref(clusterGroupQueues[i]),
+                             std::ref(clusterGroupFaceCount[i]),
+                             clusterGroupTargetFaceCount[i],
+                             mesh);
+    }
+
+    // 等待所有线程完成
+    for (auto& t : threads) {
+        t.join();
+    }
 }

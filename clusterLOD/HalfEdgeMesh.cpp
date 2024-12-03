@@ -720,13 +720,17 @@ void EMesh::exportEMesh(std::vector<Cluster>& clusters, std::vector<ClusterGroup
         clusters.push_back(std::move(cluster));
     }
 
-    for (const auto& group : m_clusterGroup) {
-        ClusterGroup clusterGroup(0.0f);
-        for (size_t clusterIdx : group) {
-            clusterGroup.clusters.push_back(&clusters[clusterIdx]);
-        }
-        clusterGroup.setGroupColor();
-        clusterGroups.push_back(std::move(clusterGroup));
+    clusterGroups.reserve(m_clusterGroupCount);
+    for(int i = 0; i < m_clusterGroupCount; ++i) {
+        ClusterGroup group(0.0f);
+        clusterGroups.push_back(std::move(group));
+    }
+    for(int i = 0; i < clusters.size(); ++i) {
+        clusterGroups[m_clusterGroupResult[i]].clusters.push_back(&clusters[i]);
+    }
+
+    for (auto& group : clusterGroups) {
+        group.setGroupColor();
     }
 }
 
