@@ -74,6 +74,7 @@ public:
     float Error;
     glm::vec3 rdColor;
 
+	Cluster() : Mesh(), Error(0.0f) {}
     Cluster(float Error);
     ~Cluster() {}
 

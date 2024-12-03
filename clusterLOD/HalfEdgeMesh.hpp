@@ -135,7 +135,6 @@ public:
     std::vector<Face*> m_faces;
 
 public:
-    void partition_loop();
     void QEM();
 
     void initCostComputation();

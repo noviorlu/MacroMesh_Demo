@@ -10,6 +10,7 @@
 #include <glm/gtx/string_cast.hpp>
 #include "cs488-framework/ObjFileDecoder.hpp"
 
+#include <omp.h>
 
 HalfEdgeMesh::HalfEdgeMesh(const Mesh& mesh) {
     m_faces.reserve(mesh.m_indexData.size() / 3);
@@ -279,12 +280,15 @@ void HalfEdgeMesh::exportMesh(std::vector<Cluster>& clusters, std::vector<Cluste
     clusters.clear();
     clusterGroups.clear();
 
+    std::vector<Cluster> localClusters(m_clusterOffsets.size());
+
+    #pragma omp parallel for
     for (size_t i = 0; i < m_clusterOffsets.size(); ++i) {
         size_t startFace = m_clusterOffsets[i];
         size_t endFace = (i + 1 < m_clusterOffsets.size()) ? m_clusterOffsets[i + 1] : m_faces.size();
 
         Cluster cluster(0.0f);
-        std::unordered_map<HalfVertex*, unsigned int> vertexIndexMap;
+        std::unordered_map<HalfVertex*, unsigned int> vertexIndexMap; // 每个线程自己的map
         unsigned int clusterVertexIndex = 0;
 
         for (size_t faceIdx = startFace; faceIdx < endFace; ++faceIdx) {
@@ -303,22 +307,26 @@ void HalfEdgeMesh::exportMesh(std::vector<Cluster>& clusters, std::vector<Cluste
                 edge = edge->next;
             } while (edge != m_faces[faceIdx]->edge);
         }
-        clusters.push_back(std::move(cluster));
+        localClusters[i] = std::move(cluster);
     }
 
+    for (size_t i = 0; i < localClusters.size(); ++i) {
+        clusters.push_back(std::move(localClusters[i]));
+    }
 
     std::unordered_map<int, float> clusterGroupClr;
-	for (size_t i = 0; i < m_clusterGroupResult.size(); ++i) {
-		int group = m_clusterGroupResult[i];
-		if (clusterGroupClr.find(group) == clusterGroupClr.end()) {
+    for (size_t i = 0; i < m_clusterGroupResult.size(); ++i) {
+        int group = m_clusterGroupResult[i];
+        if (clusterGroupClr.find(group) == clusterGroupClr.end()) {
             clusterGroupClr[group] = static_cast<float>(rand()) / RAND_MAX;
-		}
-	}
+        }
+    }
 
+    #pragma omp parallel for
     for (int i = 0; i < clusters.size(); i++) {
         float s = 0.8f;
         float v = 0.5f + static_cast<float>(rand()) / (2.0f * RAND_MAX);
-		clusters[i].rdColor = HSVtoRGB(clusterGroupClr[m_clusterGroupResult[i]], s, v);
+        clusters[i].rdColor = HSVtoRGB(clusterGroupClr[m_clusterGroupResult[i]], s, v);
     }
 }
 
@@ -339,11 +347,17 @@ void HalfEdgeMesh::exportMeshToObjFiles(const std::string& folderPath) {
         }
     }
 
-    for (const auto& [group, faces] : clusterGroupMap) {
+    #pragma omp parallel for
+    for (size_t idx = 0; idx < clusterGroupMap.size(); ++idx) {
+        auto it = std::next(clusterGroupMap.begin(), idx);
+        const auto& group = it->first;
+        const auto& faces = it->second;
+
         std::string fileName = folderPath + "/clusterGroup_" + std::to_string(group) + ".obj";
         std::ofstream outFile(fileName);
 
         if (!outFile.is_open()) {
+            #pragma omp critical
             std::cerr << "Failed to open file: " << fileName << std::endl;
             continue;
         }
@@ -374,11 +388,11 @@ void HalfEdgeMesh::exportMeshToObjFiles(const std::string& folderPath) {
         }
 
         outFile.close();
+
+        #pragma omp critical
         std::cout << "Exported clusterGroup " << group << " to " << fileName << std::endl;
     }
 }
-
-
 
 void HalfEdgeMesh::exportMesh(const std::string& objFilePath) {
     std::ofstream objFile(objFilePath);

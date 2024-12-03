@@ -149,8 +149,17 @@ void HalfEdgeMesh::HalfEdgeMeshSplitterRecursive(
 
     size_t midIdx = part0ptr;
 
-    HalfEdgeMeshSplitterRecursive(startIdx, midIdx - 1);
-    HalfEdgeMeshSplitterRecursive(midIdx, endIdx);
+    #pragma omp parallel sections
+    {
+        #pragma omp section
+        {
+            HalfEdgeMeshSplitterRecursive(startIdx, midIdx - 1);
+        }
+        #pragma omp section
+        {
+            HalfEdgeMeshSplitterRecursive(midIdx, endIdx);
+        }
+    }
 }
 
 void HalfEdgeMesh::HalfEdgeMeshSplitter() {
@@ -166,12 +175,6 @@ void HalfEdgeMesh::HalfEdgeMeshSplitter() {
     ClusterGrouper(adjacencyList, m_clusterGroupResult, m_clusterGroupCount);
     end = std::chrono::high_resolution_clock::now();
     std::cout << "Cluster Grouping Time: " << std::chrono::duration_cast<std::chrono::seconds>(end - start).count() << "s" << std::endl;
-}
-
-void HalfEdgeMesh::partition_loop(){
-
-    HalfEdgeMeshSplitter();
-
 }
 
 

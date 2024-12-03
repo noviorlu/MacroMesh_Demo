@@ -27,9 +27,11 @@
 #include <math.h>
 #include <float.h> //FLT_EPSILON, DBL_EPSILON
 
+// [cs488-project]: Include the necessary Windows headers
 #include <cstdint>
-#include <cstdlib> // 用于 malloc 和 free
-#include <cstdio>  // 用于文件操作
+#include <cstdlib>
+#include <cstdio>
+// [cs488-project end]
 
 #define loopi(start_l,end_l) for ( int i=start_l;i<end_l;++i )
 #define loopi(start_l,end_l) for ( int i=start_l;i<end_l;++i )
