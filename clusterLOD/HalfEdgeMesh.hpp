@@ -123,11 +123,12 @@ struct Face {
 class HalfEdgeMesh {
 public:
     std::string m_name;
+    float m_error = 0;
 
     HalfEdgeMesh(){}
     HalfEdgeMesh(const Mesh& mesh);
     ~HalfEdgeMesh();
-    void importMesh(const std::string& objFilePath);
+    void importMesh(const std::string& objFilePath, float error);
     void exportMesh(Mesh& mesh);
     void exportMeshToObjFiles(const std::string& folderPath);
     void exportMesh(std::vector<Cluster>& clusters, std::vector<ClusterGroup>& clusterGroups);

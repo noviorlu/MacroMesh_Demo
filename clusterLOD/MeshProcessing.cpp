@@ -279,8 +279,6 @@ void FastQEM(const std::string& lodFolder) {
 
         std::string command = simplifyExe + " " + inputPath + " " + tempOutputPath + " 0.5";
 
-        std::cout << "Running: " << command << std::endl;
-
         std::string output;
         char buffer[128];
         FILE* pipe = popen(command.c_str(), "r");
@@ -294,15 +292,14 @@ void FastQEM(const std::string& lodFolder) {
         }
         pclose(pipe);
 
-        // 从输出中提取 Total error
         std::istringstream stream(output);
         std::string line;
-        double totalError = -1; // 默认值，表示未找到
+        double totalError = -1;
         while (std::getline(stream, line)) {
             if (line.find("Total error:") != std::string::npos) {
                 std::istringstream lineStream(line);
                 std::string label;
-                lineStream >> label >> label >> totalError; // 跳过 "Total" 和 "error:"
+                lineStream >> label >> label >> totalError;
                 break;
             }
         }
@@ -325,10 +322,13 @@ void FastQEM(const std::string& lodFolder) {
 
     std::filesystem::remove_all(tempOutputFolder);
 
-    // 输出文件名和对应的误差
-    std::cout << "File Errors:" << std::endl;
+    // load it back in as a list of HalfEdgeMeshes
+    std::vector<HalfEdgeMesh> meshes;
     for (const auto& [filename, error] : fileErrorMap) {
         std::cout << "File: " << filename << ", Total Error: " << error << std::endl;
+        HalfEdgeMesh mesh;
+        mesh.importMesh((std::filesystem::path(lodFolder) / filename).generic_string(), error);
+        meshes.push_back(std::move(mesh));
     }
 }
 

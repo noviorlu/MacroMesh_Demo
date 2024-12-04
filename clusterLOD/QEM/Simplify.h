@@ -62,8 +62,8 @@ struct vec3f
 	inline vec3f operator + ( const vec3f& a ) const
 	{ return vec3f( x + a.x, y + a.y, z + a.z ); }
 
-	inline vec3f operator += ( const vec3f& a ) const
-	{ return vec3f( x + a.x, y + a.y, z + a.z ); }
+	inline vec3f& operator+=(const vec3f& a) {
+    x += a.x; y += a.y; z += a.z; return *this;}
 
 	inline vec3f operator * ( const double a ) const
 	{ return vec3f( x * a, y * a, z * a ); }
@@ -1021,10 +1021,9 @@ namespace Simplify
 	} // load_obj()
 
 	// Optional : Store as OBJ
-
 	void write_obj(const char* filename)
 	{
-		FILE *file=fopen(filename, "w");
+		FILE *file = fopen(filename, "w");
 		int cur_material = -1;
 		bool has_uv = (triangles.size() && (triangles[0].attr & TEXCOORD) == TEXCOORD);
 
@@ -1033,43 +1032,84 @@ namespace Simplify
 			printf("write_obj: can't write data file \"%s\".\n", filename);
 			exit(0);
 		}
+
 		if (!mtllib.empty())
 		{
 			fprintf(file, "mtllib %s\n", mtllib.c_str());
 		}
-		loopi(0,vertices.size())
+
+		loopi(0, vertices.size())
 		{
-			//fprintf(file, "v %lf %lf %lf\n", vertices[i].p.x,vertices[i].p.y,vertices[i].p.z);
-			fprintf(file, "v %g %g %g\n", vertices[i].p.x,vertices[i].p.y,vertices[i].p.z); //more compact: remove trailing zeros
+			fprintf(file, "v %g %g %g\n", vertices[i].p.x, vertices[i].p.y, vertices[i].p.z);
+		}
+
+
+
+		std::vector<vec3f> vertex_normals(vertices.size());
+		for (int i = 0; i < vertices.size(); i++) {
+			vertex_normals[i] = vec3f(0.0, 0.0, 0.0);
+		}
+
+		loopi(0, triangles.size()) if (!triangles[i].deleted) {
+			vec3f face_normal = triangles[i].n;
+
+			vertex_normals[triangles[i].v[0]] = vertex_normals[triangles[i].v[0]] + face_normal;
+			vertex_normals[triangles[i].v[1]] = vertex_normals[triangles[i].v[1]] + face_normal;
+			vertex_normals[triangles[i].v[2]] = vertex_normals[triangles[i].v[2]] + face_normal;
+		}
+
+		loopi(0, vertices.size()) {
+			double len = sqrt(vertex_normals[i].x * vertex_normals[i].x +
+							vertex_normals[i].y * vertex_normals[i].y +
+							vertex_normals[i].z * vertex_normals[i].z);
+			if (len > 0.0) {
+				vertex_normals[i].x /= len;
+				vertex_normals[i].y /= len;
+				vertex_normals[i].z /= len;
+			} else {
+				vertex_normals[i] = vec3f(0.0, 1.0, 0.0);
+			}
+
+			fprintf(file, "vn %g %g %g\n", vertex_normals[i].x, vertex_normals[i].y, vertex_normals[i].z);
 		}
 		if (has_uv)
 		{
-			loopi(0,triangles.size()) if(!triangles[i].deleted)
+			loopi(0, triangles.size()) if (!triangles[i].deleted)
 			{
 				fprintf(file, "vt %g %g\n", triangles[i].uvs[0].x, triangles[i].uvs[0].y);
 				fprintf(file, "vt %g %g\n", triangles[i].uvs[1].x, triangles[i].uvs[1].y);
 				fprintf(file, "vt %g %g\n", triangles[i].uvs[2].x, triangles[i].uvs[2].y);
 			}
 		}
+
+
+
 		int uv = 1;
-		loopi(0,triangles.size()) if(!triangles[i].deleted)
+		loopi(0, triangles.size()) if (!triangles[i].deleted)
 		{
 			if (triangles[i].material != cur_material)
 			{
 				cur_material = triangles[i].material;
 				fprintf(file, "usemtl %s\n", materials[triangles[i].material].c_str());
 			}
+
 			if (has_uv)
 			{
-				fprintf(file, "f %d/%d %d/%d %d/%d\n", triangles[i].v[0]+1, uv, triangles[i].v[1]+1, uv+1, triangles[i].v[2]+1, uv+2);
+				fprintf(file, "f %d/%d/%d %d/%d/%d %d/%d/%d\n",
+						triangles[i].v[0] + 1, uv, triangles[i].v[0] + 1,
+						triangles[i].v[1] + 1, uv + 1, triangles[i].v[1] + 1,
+						triangles[i].v[2] + 1, uv + 2, triangles[i].v[2] + 1);
 				uv += 3;
 			}
 			else
 			{
-				fprintf(file, "f %d %d %d\n", triangles[i].v[0]+1, triangles[i].v[1]+1, triangles[i].v[2]+1);
+				fprintf(file, "f %d//%d %d//%d %d//%d\n",
+						triangles[i].v[0] + 1, triangles[i].v[0] + 1,
+						triangles[i].v[1] + 1, triangles[i].v[1] + 1,
+						triangles[i].v[2] + 1, triangles[i].v[2] + 1);
 			}
-			//fprintf(file, "f %d// %d// %d//\n", triangles[i].v[0]+1, triangles[i].v[1]+1, triangles[i].v[2]+1); //more compact: remove trailing zeros
 		}
+
 		fclose(file);
 	}
 

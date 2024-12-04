@@ -72,7 +72,7 @@ void clusterLOD::init()
 
 	m_meshConsolidator = new Mesh();
 	HalfEdgeMesh heMesh;
-	heMesh.importMesh(ModelFilePath + "bunny/bunny.obj");
+	heMesh.importMesh(ModelFilePath + "bunny/bunny.obj", 0.0f);
 	heMesh.HalfEdgeMeshSplitter();
 	Mesh::s_meshInfoMap[heMesh.m_name] = m_meshConsolidator;
 	heMesh.exportMesh(m_meshConsolidator->m_clusterList, m_meshConsolidator->m_clusterGroupList);

@@ -127,7 +127,9 @@ HalfEdgeMesh::~HalfEdgeMesh() {
 	}
 }
 
-void HalfEdgeMesh::importMesh(const std::string& objFilePath) {
+void HalfEdgeMesh::importMesh(const std::string& objFilePath, float error) {
+    m_error = error;
+
     std::vector<glm::vec3> positions;
     std::vector<glm::vec3> normals;
     std::vector<glm::vec2> uvCoords;
@@ -388,9 +390,6 @@ void HalfEdgeMesh::exportMeshToObjFiles(const std::string& folderPath) {
         }
 
         outFile.close();
-
-        #pragma omp critical
-        std::cout << "Exported clusterGroup " << group << " to " << fileName << std::endl;
     }
 }
 
