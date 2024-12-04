@@ -7,14 +7,28 @@
 \usepackage{hyperref}
 \usepackage{setspace}
 \usepackage{enumitem}
-
-\onehalfspacing
+\usepackage{listings}
+\usepackage{xcolor}
 \usepackage[margin=1in]{geometry}
 
-\title{Cluster-Base Level of Detail Technique Analysis Periodic Report}
+\onehalfspacing
+\title{Cluster-Base Level of Detail Technique Analysis}
 \author{Yang Chen \\ Student ID: 20816397 \\ User ID: y2588che}
 \date{\today}
 \newcommand{\customnewline}{\\[1.5em]}
+\lstset{
+    basicstyle=\ttfamily\footnotesize,
+    keywordstyle=\color{blue}\bfseries,
+    commentstyle=\color{gray},
+    stringstyle=\color{red},
+    frame=single,
+    breaklines=true,
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    captionpos=b,
+    tabsize=4,
+}
+
 \begin{document}
 
 \maketitle
@@ -222,62 +236,149 @@ enabling efficient processing and rendering of large-scale scenes.
 
 \subsubsection{Half Edge Data Structures}
 
+The Half-Edge Data Structure is a widely used representation for polygonal meshes in computer graphics, particularly for applications 
+requiring efficient traversal and modification of mesh connectivity. It provides a flexible and efficient way to store and access vertices, 
+edges, and faces in a mesh.
 
-\section{Methodology}
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{HalfEdgeDS.png}
+    \caption{Illustration of the Half-Edge Data Structure. Each edge is represented as two half-edges, with references to vertices, 
+    faces, and other half-edges.\cite{2019YinHalfEdgeBlog}}
+    \label{fig:HalfEdgeDS}
+\end{figure}
+
+\paragraph{Basic Structure}
+The Half-Edge Data Structure represents a mesh using three core components:
+\begin{table}[h!]
+    \centering
+    \renewcommand{\arraystretch}{1.5}
+    \begin{tabular}{|l|p{0.85\textwidth}|}
+    \hline
+    \textbf{Component} & \textbf{Description} \\ \hline
+    \textbf{HalfEdge} & Each edge in mesh split into two directed half-edges. Each half-edge stores:
+    \begin{itemize}
+        \item \textit{origin} which is the start vertex.
+        \item \textit{next half-edge} in the current face (forming a circular linkedlist).
+        \item \textit{twin half-edge} (the opposite direction of the same edge).
+        \item \textit{face} it belongs to.
+    \end{itemize} \\ \hline
+    \textbf{Vertex} & Each vertex stores:
+    \begin{itemize}
+        \item \textit{position} in 3D space (e.g., \((x, y, z)\)).
+        \item \textit{outgoing half-edge} originate from this vertex. (can be random)
+    \end{itemize} \\ \hline
+    \textbf{Face} & Each face stores:
+    \begin{itemize}
+        \item \textit{bounding half-edges}. (can be random)
+    \end{itemize} \\ \hline
+    \end{tabular}
+    \caption{Core components of the Half-Edge Data Structure.}
+    \label{tab:halfedge_structure}
+\end{table}
+This structure allows efficient traversal of the mesh and adjacency queries, such as finding all vertices adjacent to a given vertex 
+or all edges adjacent to a face.
+
+\paragraph{Traversal Algorithms}
+Below are example pseudocode implementations for common traversal tasks using the Half-Edge Data Structure.
+
+\subparagraph{Traversing a Face}
+To traverse all the half-edges forming a face:
+\begin{lstlisting}[language=Python, caption={Pseudocode for traversing a face.}]
+function traverse_face(start_half_edge):
+    current_half_edge = start_half_edge
+    do:
+        print(current_half_edge.start_vertex)
+        current_half_edge = current_half_edge.next
+    while current_half_edge != start_half_edge
+\end{lstlisting}
+\newpage
+\subparagraph{Finding All Adjacent Vertices}
+To find all vertices adjacent to a given vertex:
+\begin{lstlisting}[language=Python, caption={Pseudocode for finding adjacent vertices.}]
+function find_adjacent_vertices(start_vertex):
+    current_half_edge = start_vertex.outgoing_half_edge
+    do:
+        adjacent_vertex = current_half_edge.twin.start_vertex
+        print(adjacent_vertex)
+        current_half_edge = current_half_edge.twin.next
+    while current_half_edge != start_vertex.outgoing_half_edge
+\end{lstlisting}
+
+\setlist[enumerate,1]{label=\makebox[10em][c]{\textbf{#1}}, labelsep=1em, leftmargin=8em}
+
+\section{Objective List}
 \subsection{Precomputation Steps}
 \begin{enumerate}
-    \item Mesh Partitioning with METIS.
-    \item Quadric Error Metrics (QEM) Simplification.
-    \item Construction of the LOD Hierarchy.
-    \item BVH Construction for LOD levels.
+    \item [\textbf{DONE}] Mesh Partitioning with METIS.
+    \item [\textbf{DONE}] Quadric Error Metrics (QEM) Simplification.
+    \item [\textbf{INPROGRESS}] Construction of the LOD Hierarchy.
+    \item [\textbf{NOT STARTED}] BVH Construction for LOD levels.
+    \item [\textbf{DONE}] Index Buffer Generation.
 \end{enumerate}
 \subsection{Runtime Pipeline}
 \begin{enumerate}
-    \item LOD Selection and Streaming.
-    \item Visibility Buffer Implementation.
-    \item Deferred Shading Pipeline.
-    \item Real-time Effects: SSR, SSAO, and MSAA.
+    \item [\textbf{NOT STARTED}] LOD Selection and Streaming.
+    \item [\textbf{NOT STARTED}] Visibility Buffer Implementation.
+    \item [\textbf{DONE}] Deferred Shading Pipeline.
+    \item [\textbf{SOMEWHAT DONE}] Screen Space Reflections.
+    \item [\textbf{SOMEWHAT DONE}] Post Processing Effects.
 \end{enumerate}
-\subsection{Post-Processing}
-Implementation of bloom, tone mapping, color grading, and Disney Principled BSDF Shader.
 
 \section{Implementation}
-\subsection{Tools and Libraries}
-Describe tools like METIS, QEM, and compute shaders used for implementation.
-\subsection{Algorithms and Data Structures}
-Explain key algorithms for LOD management and BVH traversal.
-\subsection{Optimizations}
-Detail runtime and memory optimizations employed.
+As you can see from both the code and the report, this project is barely finished. In this section, I will elaborate on the reasons 
+behind this and the challenges encountered during the implementation. The project required multiple redesigns and rewrites of critical 
+components, including the mesh structure and associated algorithms.
+\customnewline
+The entire Mesh structure was redesigned three times, and the Mesh Partitioning algorithm was rewritten three times. Additionally, the 
+Quadric Error Metrics (QEM) algorithm was rewritten twice, the Mesh Consolidator was reimplemented, and the `objDecoder` was rewritten 
+once before reverting to the original version.
+\customnewline
+The first implementation did not involve any additional Mesh structure. All edge and face information was generated on the fly, and the 
+METISPartitionKWay method was used for partitioning. However, this approach was prohibitively slow and unsuitable for practical use. 
+Moreover, since QEM required edge information, it became clear that an upgrade to the mesh structure was necessary. 
+\customnewline
+The redesign adopted a recursive strategy using METISPartitionRecursive. This approach recursively bisected the mesh, allowing each 
+subdivision to spawn a new thread for parallel execution. This improved the partitioning performance significantly.
+\customnewline
+At this point, I discovered the Half-Edge Data Structure, which seemed promising due to its efficient querying capabilities. However, 
+implementing and maintaining a robust Half-Edge structure proved to be extremely challenging. Constructing the data structure itself 
+consumed a significant amount of time as every pointer had to correctly reference the appropriate edge. Despite the difficulties, I 
+managed to construct a functioning Half-Edge structure.
+\customnewline
+When combining the Half-Edge structure with QEM edge collapse, the complexity increased exponentially. Maintaining a robust Half-Edge 
+data structure while reducing edges became nearly impossible. This involved:
+\begin{itemize}
+    \item Removing the inner edges of the face to be collapsed.
+    \item Merging adjacent edges' twins.
+    \item Reassigning all edges connected to a vertex to another edge.
+\end{itemize}
+These steps frequently broke the previous and next pointers in the Half-Edge structure, resulting in infinite loops in face traversal 
+algorithms. Additionally, numerous corner cases such as boundary edges, back-to-back faces, and back-to-back edges caused further 
+complications. After three days and 36 hours of debugging without success, I abandoned using the Half-Edge structure for QEM.
 
-\section{Results and Analysis}
-\subsection{Visual Output}
-Provide rendered scene images and LOD transition comparisons.
-\subsection{Performance Metrics}
-Analyze frame rates and memory usage for different scene complexities.
-\subsection{Quality Metrics}
-Discuss visual fidelity using SSR, SSAO, and post-processing effects.
+I then moved to a simpler structure called EdgeMesh, which uses an unordered map to map vertex pairs to edges without directionality. 
+This structure made implementing the METISPartitionRecursive and QEM algorithms much easier. Despite spending additional time debugging, 
+I successfully implemented QEM using this structure. However, a new problem arose: optimizing even a moderately complex model, such as 
+the Stanford Bunny (140,000 faces), took 38 minutes.
 
-\section{Discussion}
-\subsection{Achievements}
-Highlight successful implementations and key contributions.
-\subsection{Limitations}
-Discuss challenges and areas needing improvement.
-\subsection{Future Work}
-Suggest potential enhancements, such as dynamic BVH updates or improved mesh merging algorithms.
+Parallelizing the QEM algorithm for clusters introduced global memory race conditions that I was unable to resolve. Consequently, I 
+abandoned both of my QEM implementations.
 
-\section{Conclusion}
-Summarize the objectives, methods, and outcomes, emphasizing the significance of the project.
+Out of options, I turned to a third-party library called FastQEM. After downloading and building the binary, I tested it on the Stanford 
+Bunny, which completed in just 0.5 seconds. This drastic improvement suggested that the library employed optimizations I was unaware of, 
+and it became apparent that my QEM implementation had issues. Currently, my workflow involves:
+\begin{itemize}
+    \item Performing an initial METIS partition on the mesh.
+    \item Exporting the partitioned mesh as an `.obj` file.
+    \item Running the FastQEM binary on the exported mesh.
+    \item Loading the optimized mesh back into my project.
+\end{itemize}
+
+The latest progress involves attempting to integrate this workflow into a streamlined loop. However, the project is far from completion, 
+and it is clear that it cannot be finished on time.
 
 \section{Bibliography}
 \printbibliography
-
-\appendix
-\section{Appendices}
-\subsection{Code Samples}
-Include snippets of key algorithms.
-\subsection{Additional Results}
-Extend performance graphs and rendered images.
-\subsection{Glossary}
-Provide definitions for technical terms used.
 
 \end{document}
