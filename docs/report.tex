@@ -1,0 +1,283 @@
+\documentclass[12pt]{extarticle}
+\usepackage{fullpage}
+\usepackage[backend=bibtex]{biblatex}
+\addbibresource{ref.bib}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{hyperref}
+\usepackage{setspace}
+\usepackage{enumitem}
+
+\onehalfspacing
+\usepackage[margin=1in]{geometry}
+
+\title{Cluster-Base Level of Detail Technique Analysis Periodic Report}
+\author{Yang Chen \\ Student ID: 20816397 \\ User ID: y2588che}
+\date{\today}
+\newcommand{\customnewline}{\\[1.5em]}
+\begin{document}
+
+\maketitle
+\newpage
+
+\begin{abstract}
+This report presents the development of a real-time ClusterLOD Renderer designed for efficient rendering of large-scale scenes 
+with complex geometry. The project addresses challenges in maintaining high visual fidelity, optimizing performance, and 
+reducing memory usage, leveraging modern GPU techniques. Key methods include mesh partitioning, Quadric Error Metrics (QEM) simplification.
+\customnewline
+The motivation for this work stems from significant advancements in game engine technologies in recent years, particularly the 
+introduction of Nanite and Lumen in Unreal Engine 5 in 2020. Nanite revolutionized mesh handling by enabling the efficient 
+loading and use of massive geometry data in real-time scenes, while Lumen focused on indirect global illumination, delivering 
+realistic lighting and reflections. While Lumen improves visual quality by simulating light transport, this project emphasizes 
+addressing the challenges of rendering massive geometry datasets, akin to those targeted by Nanite.
+\customnewline
+This project primarily focuses on managing large-scale meshes by utilizing clustering techniques to achieve two core objectives:
+first, to parallelize and accelerate the QEM simplification algorithm, enabling efficient precomputation of mesh levels of 
+detail; second, to allow piecewise Level of Detail (LOD) selection instead of traditional whole-mesh LOD selection. These 
+innovations make it possible to dynamically adjust detail levels across different parts of a scene, optimizing both performance 
+and memory usage in real-time applications.
+\customnewline
+By combining clustering, hierarchical data structures, and a GPU-driven pipeline, this work advances the state-of-the-art in 
+real-time rendering, making it well-suited for applications requiring high-quality visuals and efficient resource utilization.
+\end{abstract}
+
+\newpage
+
+\tableofcontents
+\newpage
+
+\section{Introduction}
+\subsection{Purpose}
+The motivation for this project originates from the impressive advancements showcased by Unreal Engine 5 (UE5) in 2020, particularly 
+the Tomb Raider Cave demo. This demo demonstrated the capability to render billions of triangles in a single frame, all in real-time. Inspired 
+by this, I aim to develop a similar system capable of rendering large-scale scenes in real-time, enabling the creation of more complex and 
+immersive environments in games, ultimately enhancing realism.
+\customnewline
+While UE5's Lumen focuses on real-time global illumination by combining multiple global illumination algorithms, it works by accumulating 
+radiance over time. It employs a `renderSurfaceCache` to convert to and from VoxelSH spheres, achieving real-time results through temporal 
+radiance accumulation. This allows Lumen to deliver highly realistic lighting in dynamic scenes.
+\customnewline
+Our project, however, focuses on Nanite, another groundbreaking technology introduced alongside Lumen. Nanite addresses the challenge of 
+efficiently rendering vast numbers of triangles in large-scale scenes. Its core innovation lies in the ability to quickly select visible 
+triangles and stream them into the GPU. This is essential for scenarios where scenes contain a high density of triangles but are viewed from 
+a distance. In such cases, the resolution of the view often cannot match the scene's geometric detail, leading to significant overdraw, as 
+multiple triangles may be rendered for a single pixel.
+\customnewline
+To solve this, an efficient Level of Detail (LOD) system is required. The LOD system dynamically adjusts the level of detail based on the 
+viewpoint, reducing overdraw and improving rendering performance. This project aims to study and replicate these ideas, exploring how to 
+implement a robust and efficient ClusterLOD rendering system.
+
+\subsection{Goal}
+The goal of this project is to develop a real-time ClusterLOD renderer for efficiently rendering large-scale scenes with complex geometries.
+\customnewline
+This problem can be divided into two main parts: precomputation and runtime pipeline. 
+\customnewline
+In the \textbf{precomputation} stage, the tasks include:
+\begin{enumerate}
+    \item \textbf{Mesh Partitioning:} Divide the mesh into multiple clusters, where each cluster represents a group of spatially adjacent triangles.
+    \item \textbf{QEM Simplification:} Simplify the clusters using the Quadric Error Metrics (QEM) algorithm, reducing the number of 
+    triangles while maintaining visual fidelity.
+    \item \textbf{LOD Hierarchy Construction:} Repeat the above process iteratively to generate a Level of Detail (LOD) hierarchy. Finally, 
+    build a Bounding Volume Hierarchy (BVH) to organize these LODs, enabling fast, compute-shader-based selection and streaming.
+\end{enumerate}
+In the \textbf{runtime pipeline}, the tasks include:
+\begin{enumerate}
+    \item \textbf{LOD Selection and Streaming:} Select and stream visible clusters dynamically based on the view frustum and screen-space 
+    error metrics.
+    \item \textbf{Visibility Buffer Implementation:} Implement a visibility buffer to assist with cluster culling. Inspired by UE5, this 
+    involves using the visibility buffer from the previous frame to conservatively determine visible objects, followed by further culling 
+    calculations for remaining clusters.
+    \item \textbf{Deferred Shading Pipeline:} Integrate the visibility buffer into the deferred shading pipeline without disrupting its workflow.
+    \item \textbf{Real-time Effects:} Implement advanced real-time effects, including Screen Space Reflections (SSR), Screen Space Ambient 
+    Occlusion (SSAO), and Multi-Sample Anti-Aliasing (MSAA).
+    \item \textbf{Post-Processing Effects:} Apply effects such as bloom, tone mapping, and color grading to enhance the final rendered image.
+\end{enumerate}
+By addressing both precomputation and runtime challenges, this project aims to create a high-performance ClusterLOD rendering system capable 
+of handling the complexities of large-scale, detailed scenes in real-time.
+
+\section{Background and Related Work}
+\subsection{Existing Techniques}
+Level of Detail (LOD) rendering is a critical technique for managing performance in real-time rendering. Various LOD methods have been 
+developed to balance visual fidelity and computational cost. This section provides an overview of key LOD techniques:
+\begin{enumerate}
+    \item \textbf{Discrete Level of Detail (DLOD):} Objects are preprocessed to generate multiple resolutions, such as high, medium, 
+    and low LODs. The appropriate LOD is selected at runtime based on the viewer's distance. While simple and efficient, this method 
+    may suffer from popping artifacts during transitions. This is generally generated by the artist and is not dynamic.
+
+    \item \textbf{Continuous Level of Detail (CLOD):} Instead of predefined levels, geometry is simplified dynamically in real-time, 
+    ensuring smooth transitions. This approach is commonly used in terrain rendering, such as the ROAM algorithm, but requires higher 
+    computational effort.
+
+    \item \textbf{Screen Space Error Metrics:} This method uses the projected size of objects on the screen to dynamically adjust LOD. 
+    By measuring pixel coverage, this technique ensures optimal resource allocation and minimizes overdraw.
+
+    \item \textbf{Cluster-Based LOD:} Introduced in Unreal Engine 5 as Nanite, this technique divides models into clusters and generates 
+    multi-level LODs. GPU-based parallel processing enables fast selection and streaming of visible clusters, making it suitable for 
+    large-scale, highly detailed scenes.
+
+    \item \textbf{Image-Based LOD (Billboarding):} Objects far from the camera are replaced with 2D textures mapped onto planes, 
+    significantly reducing geometry complexity. This technique is widely used for rendering vegetation and distant objects in large scenes.
+
+    \item \textbf{Geometry Shaders for LOD:} Geometry shaders dynamically adjust the level of detail during rendering. Although 
+    flexible, this approach may face performance bottlenecks for highly detailed models.
+\end{enumerate}
+Each of these techniques offers unique advantages and trade-offs. In this project, we focus on Cluster-Based LOD to handle large-scale 
+scenes with high geometric complexity, inspired by Nanite's efficient cluster-based streaming and selection pipeline.
+
+\subsection{Relevant Concepts}
+
+This section provides an overview of the key concepts used in this project: mesh partitioning, QEM simplification, and Bounding Volume 
+Hierarchy (BVH).
+
+\subsubsection{Mesh Partitioning}
+Mesh partitioning is the process of dividing a mesh into smaller, spatially coherent clusters. This is essential for efficient processing
+and management of complex geometries in real-time rendering. One common approach is to use graph partitioning algorithms, such as 
+those implemented in the METIS library. METIS works by representing the mesh as a graph, where vertices correspond to mesh elements 
+(e.g., triangles) and edges represent adjacency relationships. By minimizing the edge cut between partitions, METIS ensures that 
+clusters are spatially cohesive, which is critical for Level of Detail (LOD) systems and BVH construction.
+
+\subsubsection{QEM Simplification}
+
+Quadric Error Metrics (QEM) simplification is a widely-used algorithm for reducing the complexity of a mesh while preserving its 
+visual fidelity. The core idea is to iteratively collapse edges by combining two vertices into one, minimizing the geometric error 
+introduced by the operation. This section describes the steps of the QEM simplification algorithm and formulates the edge collapse 
+operation mathematically.
+\paragraph{Steps of QEM Simplification:}
+\begin{enumerate}
+    \item \textbf{Initialize Error Matrices:}
+    For each vertex \(v_i\) in the mesh, calculate its associated quadric error matrix \(Q_i\). This matrix is defined based on the 
+    sum of the squared distances to the planes of all triangles adjacent to \(v_i\):
+    \[
+    Q_i = \sum_{p \in \text{adjacent planes}} \mathbf{k}_p \mathbf{k}_p^T
+    \]
+    where \(\mathbf{k}_p = [a, b, c, d]^T\) is the plane equation \(ax + by + cz + d = 0\) normalized for each triangle plane adjacent 
+    to \(v_i\). This 4 by 4 matrix can be used to calculate the distance from a point to a plane derived from \cite{Garland1997}.
+
+
+    \item \textbf{Select Candidate Edges:}
+    Identify all edges in the mesh that are candidates for collapsing. An edge is defined by two vertices \(v_i\) and \(v_j\).
+
+    \item \textbf{Compute Collapse Cost:}
+    For each edge \((v_i, v_j)\), calculate the combined quadric error matrix:
+    \[
+    Q_{ij} = Q_i + Q_j
+    \]
+    The optimal new position \(v'\) is computed by minimizing the quadric error:
+    \[
+    \text{Error}(v') = v'^T Q_{ij} v'
+    \]
+    where \(v' = [x, y, z, 1]^T\). To find the position \(v'\) that minimizes this error, the following steps are taken:
+    \begin{enumerate}
+        \item Represent \(Q_{ij}\) as:
+        \[
+        Q_{ij} = 
+        \begin{bmatrix}
+        A & b \\
+        b^T & c
+        \end{bmatrix}
+        \]
+        where \(A\) is a \(3 \times 3\) matrix, \(b\) is a \(3 \times 1\) vector, and \(c\) is a scalar.
+        \item Solve for \(v'\) if \(A\) is invertible:
+        \[
+        v' = -A^{-1} b
+        \]
+        \item If \(A\) is singular (not invertible), choose \(v'\) as one of the following:
+        \begin{itemize}
+            \item Vertex \(v_i\),
+            \item Vertex \(v_j\),
+            \item The midpoint of \((v_i, v_j)\): \(\frac{v_i + v_j}{2}\).
+        \end{itemize}
+        Compare the quadric error values at these candidate positions and select the one with the smallest error.
+    \end{enumerate}
+
+    \item \textbf{Edge Collapse Error:}
+    The quadric error associated with collapsing an edge \((v_i, v_j)\) is defined as:
+    \[
+    \text{Error}(v') = v'^T Q_{ij} v'
+    \]
+    where \(Q_{ij}\) is the combined quadric matrix of \(v_i\) and \(v_j\). This error represents the deviation of the simplified surface from the original.
+
+    \item \textbf{Collapse Edge:}
+    Collapse the edge \((v_i, v_j)\) into the new vertex \(v'\). Update the mesh connectivity and recompute affected triangles to reflect the collapse.
+
+    \item \textbf{Repeat Until Target Simplification:}
+    Continue collapsing edges with the lowest cost until the target number of triangles or the desired error threshold is reached.
+
+\end{enumerate}
+
+By iteratively applying the steps described above, QEM simplifies the mesh while maintaining its essential geometric features, 
+making it an ideal choice for real-time LOD rendering.
+ 
+
+\subsubsection{Bounding Volume Hierarchy (BVH)}
+A Bounding Volume Hierarchy (BVH) is a tree-like data structure used to organize objects in a 3D space. Each node in the BVH contains 
+a bounding volume (e.g., an axis-aligned bounding box) that encapsulates a subset of the scene's geometry. BVHs are widely used in 
+real-time rendering for tasks like frustum culling, ray tracing, and LOD selection. By hierarchically grouping objects, BVHs enable 
+efficient spatial queries and reduce the computational cost of rendering. In the context of ClusterLOD, BVHs are constructed to 
+organize LOD levels, allowing for fast selection and streaming of visible clusters based on the view frustum and screen-space error 
+metrics.
+
+These concepts—mesh partitioning, QEM simplification, and BVH—form the foundation of the ClusterLOD system implemented in this project, 
+enabling efficient processing and rendering of large-scale scenes.
+
+\subsubsection{Half Edge Data Structures}
+
+
+\section{Methodology}
+\subsection{Precomputation Steps}
+\begin{enumerate}
+    \item Mesh Partitioning with METIS.
+    \item Quadric Error Metrics (QEM) Simplification.
+    \item Construction of the LOD Hierarchy.
+    \item BVH Construction for LOD levels.
+\end{enumerate}
+\subsection{Runtime Pipeline}
+\begin{enumerate}
+    \item LOD Selection and Streaming.
+    \item Visibility Buffer Implementation.
+    \item Deferred Shading Pipeline.
+    \item Real-time Effects: SSR, SSAO, and MSAA.
+\end{enumerate}
+\subsection{Post-Processing}
+Implementation of bloom, tone mapping, color grading, and Disney Principled BSDF Shader.
+
+\section{Implementation}
+\subsection{Tools and Libraries}
+Describe tools like METIS, QEM, and compute shaders used for implementation.
+\subsection{Algorithms and Data Structures}
+Explain key algorithms for LOD management and BVH traversal.
+\subsection{Optimizations}
+Detail runtime and memory optimizations employed.
+
+\section{Results and Analysis}
+\subsection{Visual Output}
+Provide rendered scene images and LOD transition comparisons.
+\subsection{Performance Metrics}
+Analyze frame rates and memory usage for different scene complexities.
+\subsection{Quality Metrics}
+Discuss visual fidelity using SSR, SSAO, and post-processing effects.
+
+\section{Discussion}
+\subsection{Achievements}
+Highlight successful implementations and key contributions.
+\subsection{Limitations}
+Discuss challenges and areas needing improvement.
+\subsection{Future Work}
+Suggest potential enhancements, such as dynamic BVH updates or improved mesh merging algorithms.
+
+\section{Conclusion}
+Summarize the objectives, methods, and outcomes, emphasizing the significance of the project.
+
+\section{Bibliography}
+\printbibliography
+
+\appendix
+\section{Appendices}
+\subsection{Code Samples}
+Include snippets of key algorithms.
+\subsection{Additional Results}
+Extend performance graphs and rendered images.
+\subsection{Glossary}
+Provide definitions for technical terms used.
+
+\end{document}

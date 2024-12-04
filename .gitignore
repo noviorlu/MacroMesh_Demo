@@ -39,9 +39,12 @@ A4_[Ss]olution/A4
 *dll
 *sln
 
-proposal/*
-!proposal/proposal.pdf
-!proposal/proposal.tex
-!proposal/refereneces.bib
+docs/*
+!docs/proposal.pdf
+!docs/proposal.tex
+!docs/ref.bib
+!docs/report.pdf
+!docs/report.tex
+
 /clusterLOD/vsproject/.vs/CS488-Projects
 /clusterLOD/log.txt
