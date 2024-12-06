@@ -313,8 +313,9 @@ class SymetricMatrix {
 };
 ///////////////////////////////////////////
 
-namespace Simplify
+class MeshSimplifier
 {
+public:
 	// Global Variables & Strctures
 	enum Attributes {
 		NONE,
@@ -332,15 +333,18 @@ namespace Simplify
 	std::vector<std::string> materials;
 	float total_error = 0.0;
 	int edgeCollapseCount = 0;
-	// Helper functions
 
-	double vertex_error(SymetricMatrix q, double x, double y, double z);
-	double calculate_error(int id_v1, int id_v2, vec3f &p_result);
-	bool flipped(vec3f p,int i0,int i1,Vertex &v0,Vertex &v1,std::vector<int> &deleted);
-	void update_uvs(int i0,const Vertex &v,const vec3f &p,std::vector<int> &deleted);
-	void update_triangles(int i0,Vertex &v,std::vector<int> &deleted,int &deleted_triangles);
-	void update_mesh(int iteration);
-	void compact_mesh();
+private:
+	// Helper functions
+	// double vertex_error(SymetricMatrix q, double x, double y, double z);
+	// double calculate_error(int id_v1, int id_v2, vec3f &p_result);
+	// bool flipped(vec3f p,int i0,int i1,Vertex &v0,Vertex &v1,std::vector<int> &deleted);
+	// void update_uvs(int i0,const Vertex &v,const vec3f &p,std::vector<int> &deleted);
+	// void update_triangles(int i0,Vertex &v,std::vector<int> &deleted,int &deleted_triangles);
+	// void update_mesh(int iteration);
+	// void compact_mesh();
+
+public:
 	//
 	// Main simplification function
 	//
@@ -349,7 +353,6 @@ namespace Simplify
 	//                 5..8 are good numbers
 	//                 more iterations yield higher quality
 	//
-
 	void simplify_mesh(int target_count, double agressiveness=7, bool verbose=false)
 	{
 		// init
@@ -557,7 +560,7 @@ namespace Simplify
 		compact_mesh();
 	} //simplify_mesh_lossless()
 
-
+private:
 	// Check if a triangle flips when this edge is removed
 
 	bool flipped(vec3f p,int i0,int i1,Vertex &v0,Vertex &v1,std::vector<int> &deleted)
@@ -868,6 +871,7 @@ namespace Simplify
 		return str;
 	}
 
+public:
 	//Option : Load OBJ
 	void load_obj(const char* filename, bool process_uv=false){
 		vertices.clear();
@@ -1111,128 +1115,6 @@ namespace Simplify
 		}
 
 		fclose(file);
-	}
-
-	#ifdef _MSC_VER
-	#pragma pack(2)
-	struct mz3hdr {
-		uint16_t SIGNATURE, ATTR;
-		uint32_t NFACE, NVERT, NSKIP;
-	};
-	#pragma pack()	
-	#else
-	struct __attribute__((__packed__)) mz3hdr {
-		uint16_t SIGNATURE, ATTR;
-		uint32_t NFACE, NVERT, NSKIP;
-	};
-	#endif
-
-	void load_mz3(const char* filename) {
-		vertices.clear();
-		triangles.clear();
-		int material = -1;
-		std::map<std::string, int> material_map;
-		std::vector<vec3f> uvs;
-		std::vector<std::vector<int> > uvMap;
-		FILE *fp = fopen(filename,"rb");
-		struct mz3hdr h;
-		size_t bytes_read = fread(&h, sizeof(struct mz3hdr), 1, fp);
-		if (bytes_read <= 0) {
-			printf("Unable to read %s\n", filename);
-			exit(EXIT_FAILURE);
-		}
-		uint16_t sig = 23117;
-		if (sig != h.SIGNATURE) {
-			fclose(fp);
-			printf("Unable to read mz3 (unable to read gz compressed) %s\n", filename);
-			exit(EXIT_FAILURE);
-		}
-		triangles.resize(h.NFACE);
-		vertices.resize(h.NVERT);
-		fseek(fp, (int)(sizeof(struct mz3hdr) + h.NSKIP), SEEK_SET);
-		uint32_t tribytes = h.NFACE * 3 * sizeof(uint32_t);
-		uint32_t *tris = (uint32_t *) malloc(tribytes);
-		bytes_read = fread(tris, tribytes, 1, fp);
-		if (bytes_read <= 0) {
-			printf("Unable to read triangles %s\n", filename);
-			exit(EXIT_FAILURE);
-		}
-		uint32_t vertbytes32 = h.NVERT * 3 * sizeof(float);
-		float * verts32 = (float *) malloc(vertbytes32);
-		bytes_read = fread(verts32, vertbytes32, 1, fp);
-		if (bytes_read <= 0) {
-			printf("Unable to read vertices %s\n", filename);
-			exit(EXIT_FAILURE);
-		}
-		int j = 0;
-		for (int i = 0; i < h.NVERT; i++) {
-			vertices[i].p.x = verts32[j++];
-			vertices[i].p.y = verts32[j++];
-			vertices[i].p.z = verts32[j++];
-		}
-		j = 0;
-		for (int i = 0; i < h.NFACE; i++) {
-			triangles[i].v[0] = tris[j++];
-			triangles[i].v[1] = tris[j++];
-			triangles[i].v[2] = tris[j++];
-			triangles[i].attr = 0;
-			triangles[i].material = material;
-		}
-		free(tris);
-		free(verts32);
-		fclose(fp);
-	}
-	
-	void write_mz3(const char* filename) {
-		// https://github.com/neurolabusc/surf-ice/tree/master/mz3
-		bool has_uv = (triangles.size() && (triangles[0].attr & TEXCOORD) == TEXCOORD);
-		if (has_uv) {
-			printf("write_mz3 can not store UVs (use .obj format).\n");
-		}
-		struct mz3hdr h;
-		h.SIGNATURE = 0x5A4D;
-		h.ATTR = 3;//isFACE +1 isVERT +2
-		h.NVERT = vertices.size();
-		h.NSKIP = 0;
-		h.NFACE = 0;
-		for (int i = 0; i < triangles.size(); i++) {
-			if(!triangles[i].deleted)
-				h.NFACE++;
-		}
-		if ((h.NFACE < 1) || (h.NVERT < 3)) {
-			printf("write_mz3: no surviving triangles.\n");
-			exit(1);
-		}
-		FILE *fp;
-		fp = fopen(filename, "wb");
-		if (fp == NULL) {
-			printf("write_mz3: can't write data file \"%s\".\n", filename);
-			exit(1);
-		}
-		fwrite(&h, sizeof(struct mz3hdr), 1, fp);
-		uint32_t tribytes = h.NFACE * 3 * sizeof(uint32_t);
-		uint32_t *tris = (uint32_t *) malloc(tribytes);
-		int j = 0;
-		for (int i = 0; i < triangles.size(); i++) {
-			if(triangles[i].deleted)
-				continue;
-			tris[j++] = triangles[i].v[0];
-			tris[j++] = triangles[i].v[1];
-			tris[j++] = triangles[i].v[2];
-		}
-		fwrite(tris, tribytes, 1, fp);
-		free(tris);
-		uint32_t vertbytes32 = h.NVERT * 3 * sizeof(float);
-		float * verts32 = (float *) malloc(vertbytes32);
-		j = 0;
-		for (int i = 0; i < h.NVERT; i++) {
-			verts32[j++] = vertices[i].p.x;
-			verts32[j++] = vertices[i].p.y;
-			verts32[j++] = vertices[i].p.z;
-		}
-		fwrite(verts32, vertbytes32, 1, fp);
-		free(verts32);
-		fclose(fp);
 	}
 };
 

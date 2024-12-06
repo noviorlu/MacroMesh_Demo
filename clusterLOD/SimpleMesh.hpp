@@ -1,14 +1,14 @@
 #pragma once
 #include <glm/glm.hpp>
 
-#include <queue>
 #include <unordered_set>
 #include <vector>
-#include <array>
 #include <algorithm>
 #include <string>
 
-#include <chrono>
+#include <omp.h>
+
+class MeshSimplifier;
 
 class SimpleVertex{
 public:
@@ -25,9 +25,12 @@ public:
     SimpleVertex* v2;
     SimpleVertex* v3;
     std::unordered_set<SimpleFace*> adjacentFace;
-    SimpleFace(SimpleVertex* v1, SimpleVertex* v2, SimpleVertex* v3) : v1(v1), v2(v2), v3(v3) {}
+    SimpleFace(SimpleVertex* v1, SimpleVertex* v2, SimpleVertex* v3) : v1(v1), v2(v2), v3(v3) {
+        omp_init_lock(&lock);
+    }
 
     int clusterId;
+    omp_lock_t lock;
 
 	static void swap(SimpleFace& a, SimpleFace& b) {
 		std::swap(a.clusterId, b.clusterId);
@@ -37,15 +40,23 @@ public:
 		std::swap(a.v3, b.v3);
 
         for (SimpleFace* AadjFace : a.adjacentFace) {
+            omp_set_lock(&AadjFace->lock);
+            {
 			std::unordered_set<SimpleFace*>& adjAadj = AadjFace->adjacentFace;
             adjAadj.erase(&a);
             adjAadj.insert(&b);
+            }
+            omp_unset_lock(&AadjFace->lock);
         }
         
         for (auto* BadjFace : b.adjacentFace) {
+            omp_set_lock(&BadjFace->lock);
+            {
             std::unordered_set<SimpleFace*>& adjBadj = BadjFace->adjacentFace;
             adjBadj.erase(&b);
             adjBadj.insert(&a);
+            }
+            omp_unset_lock(&BadjFace->lock);
         }
 
 		std::swap(a.adjacentFace, b.adjacentFace);
@@ -67,7 +78,9 @@ public:
     void splitterRecur(int start, int end, int depth);
     void splitter();
 
-    float QEM(int start, int end, int ratio);
+    void exportMeshSimplifier(MeshSimplifier& simplifier, int startIdx, int endIdx);
+    float QEM(int start, int end, const std::string& lodFolderPath, float ratio);
+    void importMeshSimplifier(const MeshSimplifier& simplifier);
 
     void partition_loop(const std::string& objFilePath, const std::string& lodFolderPath);
 

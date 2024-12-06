@@ -2,7 +2,7 @@
 
 #include "cs488-framework/ObjFileDecoder.hpp"
 
-#include "QEM/Simplify.h"
+#include "QEM/Simplify.hpp"
 
 #include <metis.h>
 #include <filesystem>
@@ -263,24 +263,166 @@ void SimpleMesh::partition_loop(const std::string& objFilePath, const std::strin
     auto starttime = std::chrono::high_resolution_clock::now();
     importMesh(objFilePath);
     auto endtime = std::chrono::high_resolution_clock::now();
-    std::cout << "Import Mesh Time: " << std::chrono::duration_cast<std::chrono::seconds>(endtime - starttime).count() << "s" << std::endl;
+    std::cout << "Import Mesh Time: " 
+              << std::fixed << std::setprecision(5)
+              << std::chrono::duration<double>(endtime - starttime).count()
+              << "s" << std::endl;
 
 	m_clusterGroupOffsets.clear();
 	m_clusterOffsets.clear();
 
-    starttime = std::chrono::high_resolution_clock::now();
-    splitter();
-    endtime = std::chrono::high_resolution_clock::now();
-    std::cout << "Splitter Time: " << std::chrono::duration_cast<std::chrono::seconds>(endtime - starttime).count() << "s" << std::endl;
+    // starttime = std::chrono::high_resolution_clock::now();
+    // splitter();
+    // endtime = std::chrono::high_resolution_clock::now();
+    // std::cout << "Splitter Time: " 
+    //           << std::fixed << std::setprecision(5)
+    //           << std::chrono::duration<double>(endtime - starttime).count()
+    //           << "s" << std::endl;
 
-    starttime = std::chrono::high_resolution_clock::now();
-    exportClusterGroup(lodFolderPath);
-    endtime = std::chrono::high_resolution_clock::now();
-    std::cout << "Export Cluster Group Time: " << std::chrono::duration_cast<std::chrono::seconds>(endtime - starttime).count() << "s" << std::endl;
+    // starttime = std::chrono::high_resolution_clock::now();
+    // exportClusterGroup(lodFolderPath);
+    // endtime = std::chrono::high_resolution_clock::now();
+    //     std::cout << "Export Cluster Group Time: " 
+    //           << std::fixed << std::setprecision(5)
+    //           << std::chrono::duration<double>(endtime - starttime).count()
+    //           << "s" << std::endl;
+
+    QEM(0, m_faces.size() - 1, lodFolderPath, 0.5);
 }
 
 
+void SimpleMesh::exportMeshSimplifier(MeshSimplifier& simplifier, int startIdx, int endIdx) {
+    simplifier.vertices.clear();
+    simplifier.triangles.clear();
+    simplifier.refs.clear();
 
-void SimpleMesh::QEM(int start, int end, int ratio = 0.5) {
+    std::unordered_map<int, int> vertexIndexMap;
+    int simplifierVertexIndex = 0;
 
+    for (int i = startIdx; i <= endIdx; ++i) {
+        const auto& face = m_faces[i];
+
+        auto processVertex = [&](SimpleVertex* vertex) {
+            int originalIndex = std::distance(&m_vertices[0], vertex);
+            if (vertexIndexMap.find(originalIndex) == vertexIndexMap.end()) {
+                MeshSimplifier::Vertex simplifiedVertex;
+                simplifiedVertex.p = vec3f(vertex->position.x, vertex->position.y, vertex->position.z);
+                simplifiedVertex.tstart = 0;
+                simplifiedVertex.tcount = 0;
+                simplifiedVertex.border = 0;
+
+                vertexIndexMap[originalIndex] = simplifierVertexIndex;
+                simplifier.vertices.push_back(simplifiedVertex);
+                ++simplifierVertexIndex;
+            }
+        };
+
+        processVertex(face.v1);
+        processVertex(face.v2);
+        processVertex(face.v3);
+    }
+
+    for (int i = startIdx; i <= endIdx && i < m_faces.size(); ++i) {
+        const auto& face = m_faces[i];
+        MeshSimplifier::Triangle simplifiedTriangle;
+
+        simplifiedTriangle.v[0] = vertexIndexMap[std::distance(&m_vertices[0], face.v1)];
+        simplifiedTriangle.v[1] = vertexIndexMap[std::distance(&m_vertices[0], face.v2)];
+        simplifiedTriangle.v[2] = vertexIndexMap[std::distance(&m_vertices[0], face.v3)];
+
+        glm::vec3 faceNormal = glm::normalize(glm::cross(
+            face.v2->position - face.v1->position,
+            face.v3->position - face.v1->position
+        ));
+        simplifiedTriangle.n = vec3f(faceNormal.x, faceNormal.y, faceNormal.z);
+
+        simplifiedTriangle.uvs[0] = vec3f(face.v1->uv.x, face.v1->uv.y, 0.0);
+        simplifiedTriangle.uvs[1] = vec3f(face.v2->uv.x, face.v2->uv.y, 0.0);
+        simplifiedTriangle.uvs[2] = vec3f(face.v3->uv.x, face.v3->uv.y, 0.0);
+
+        simplifiedTriangle.deleted = 0;
+        simplifiedTriangle.dirty = 0;
+        simplifiedTriangle.attr = MeshSimplifier::Attributes::TEXCOORD | MeshSimplifier::Attributes::NORMAL;
+        simplifiedTriangle.material = -1;
+
+        simplifier.triangles.push_back(simplifiedTriangle);
+    }
+}
+
+float SimpleMesh::QEM(int start, int end, const std::string& lodFolderPath, float ratio = 0.5) {
+    MeshSimplifier simplifier;
+    exportMeshSimplifier(simplifier, 0, m_faces.size() - 1);
+
+    int target_count = simplifier.triangles.size() >> 1;
+
+    if (ratio > 1.0) ratio = 1.0;
+    if (ratio <= 0.0) {
+        std::cout << "Ratio must be BETWEEN zero and one." << std::endl;
+        return EXIT_FAILURE;
+    }
+    target_count = round((float)simplifier.triangles.size() * ratio);
+
+    if (target_count < 4) {
+        std::cout << "Object will not survive such extreme decimation" << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    int startSize = simplifier.triangles.size();
+    simplifier.simplify_mesh(target_count, 7.0, true);
+
+    if (simplifier.triangles.size() >= startSize) {
+        std::cout << "Unable to reduce mesh." << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    simplifier.write_obj((lodFolderPath + "/QEMcluster.obj").c_str());
+
+    std::cout << "Output: " << simplifier.vertices.size() << " vertices, " << simplifier.triangles.size() 
+              << " triangles (" << (float)simplifier.triangles.size() / (float)startSize 
+              << " reduction; " << ((float)(clock() - start)) / CLOCKS_PER_SEC << " sec)" << std::endl;
+    std::cout << "Total error: " << simplifier.total_error << std::endl;
+
+    return simplifier.total_error;
+}
+
+void SimpleMesh::importMeshSimplifier(const MeshSimplifier& simplifier) {
+    m_vertices.clear();
+    m_faces.clear();
+
+    for (const auto& simplifiedVertex : simplifier.vertices) {
+        glm::vec3 position(simplifiedVertex.p.x, simplifiedVertex.p.y, simplifiedVertex.p.z);
+        glm::vec3 normal(0.0f, 0.0f, 0.0f);
+        glm::vec2 uv(0.0f, 0.0f);
+
+        m_vertices.emplace_back(position, normal, uv);
+    }
+
+    for (const auto& simplifiedTriangle : simplifier.triangles) {
+        if (simplifiedTriangle.deleted) continue;
+
+        SimpleFace face(
+            &m_vertices[simplifiedTriangle.v[0]],
+            &m_vertices[simplifiedTriangle.v[1]],
+            &m_vertices[simplifiedTriangle.v[2]]
+        );
+
+        face.v1->uv = glm::vec2(simplifiedTriangle.uvs[0].x, simplifiedTriangle.uvs[0].y);
+        face.v2->uv = glm::vec2(simplifiedTriangle.uvs[1].x, simplifiedTriangle.uvs[1].y);
+        face.v3->uv = glm::vec2(simplifiedTriangle.uvs[2].x, simplifiedTriangle.uvs[2].y);
+
+        glm::vec3 faceNormal(simplifiedTriangle.n.x, simplifiedTriangle.n.y, simplifiedTriangle.n.z);
+        face.v1->normal += faceNormal;
+        face.v2->normal += faceNormal;
+        face.v3->normal += faceNormal;
+
+        m_faces.push_back(face);
+    }
+
+    for (auto& vertex : m_vertices) {
+        if (glm::length(vertex.normal) > 0.0f) {
+            vertex.normal = glm::normalize(vertex.normal);
+        } else {
+            vertex.normal = glm::vec3(0.0f, 1.0f, 0.0f);
+        }
+    }
 }
