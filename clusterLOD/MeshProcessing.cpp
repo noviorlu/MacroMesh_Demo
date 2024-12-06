@@ -71,17 +71,18 @@ void HalfEdgeMesh::BuildAdjacencyListForRange(
     size_t startIdx,
     size_t endIdx
 ) {
+    size_t rangeSize = endIdx - startIdx + 1;
+
     std::unordered_map<const Face*, size_t> faceToIndexMap;
-    for (size_t i = startIdx; i <= endIdx; ++i) {
-        faceToIndexMap[m_faces[i]] = i - startIdx;
+    faceToIndexMap.reserve(rangeSize);
+    for (size_t i = 0; i < rangeSize; ++i) {
+        faceToIndexMap[m_faces[i]] = i;
     }
 
-    size_t rangeSize = endIdx - startIdx + 1;
     adjacency_list.resize(rangeSize);
-
     for (size_t i = startIdx; i <= endIdx; ++i) {
-        const HalfEdge* edge = m_faces[i]->edge;
-
+        const Face* face = m_faces[i];
+        const HalfEdge* edge = face->edge;
         do {
             const HalfEdge* twin = edge->twin;
             if (twin && twin->face) {
@@ -91,104 +92,123 @@ void HalfEdgeMesh::BuildAdjacencyListForRange(
                 }
             }
             edge = edge->next;
-        } while (edge != m_faces[i]->edge);
+        } while (edge != face->edge);
     }
 }
 
-void HalfEdgeMesh::HalfEdgeMeshSplitterRecursive(
-    size_t startIdx,
-    size_t endIdx
-) {
-    if (startIdx >= endIdx) { return; }
-    
-    idx_t numElements = static_cast<idx_t>(endIdx - startIdx + 1);
-    if (numElements <= MAX_TRI_IN_CLUSTER) {
-        m_clusterOffsets.push_back(startIdx);
-        return;
-    }
-
-    std::vector<std::vector<size_t>> adjacencyList;
-    BuildAdjacencyListForRange(adjacencyList, startIdx, endIdx);
-
-    idx_t numConstraints = 1;
-    std::vector<idx_t> xadj(numElements + 1, 0);
-    std::vector<idx_t> adjncy;
-
-    for (size_t i = 0; i < numElements; ++i) {
-        xadj[i + 1] = xadj[i] + adjacencyList[i].size();
-        for (size_t neighbor : adjacencyList[i]) {
-            adjncy.push_back(static_cast<idx_t>(neighbor));
+    void HalfEdgeMesh::HalfEdgeMeshSplitterRecursive(
+        size_t startIdx,
+        size_t endIdx,
+        bool isParentClusterGroup = false,
+        int depth = 0
+    ) {
+        if(depth > 3){
+            #pragma omp critical
+            m_clusterGroupOffset.push_back(startIdx);
+            return;
         }
-    }
+        
+        // if (startIdx >= endIdx) { return; }
+        idx_t numElements = static_cast<idx_t>(endIdx - startIdx + 1);
+        // if (numElements <= MAX_TRI_IN_CLUSTER) {
+        //     m_clusterOffsets.push_back(startIdx);
+        //     return;
+        // }
 
-    idx_t numParts = 2;
-    std::vector<idx_t> partitionResult(numElements);
-    idx_t edgeCut;
+        // if(numElements <= MAX_TRI_IN_CLUSTERGROUP && !isParentClusterGroup){
+        //     m_clusterGroupOffset.push_back(startIdx);
+        //     isParentClusterGroup = true;
+        //     return;
+        // }
 
-    int result = METIS_PartGraphRecursive(
-        &numElements,           
-        &numConstraints,        
-        xadj.data(),            
-        adjncy.data(),          
-        NULL, NULL, NULL,       
-        &numParts,              
-        NULL, NULL, NULL,       
-        &edgeCut,               
-        partitionResult.data()  
-    );
+        std::vector<std::vector<size_t>> adjacencyList;
+        BuildAdjacencyListForRange(adjacencyList, startIdx, endIdx);
 
-    if (result != METIS_OK) {
-        std::cerr << "Partitioning failed with error code: " << result << std::endl;
-        return;
-    }
+        idx_t numConstraints = 1;
+        std::vector<idx_t> xadj(numElements + 1, 0);
+        std::vector<idx_t> adjncy;
 
-    size_t part0ptr = startIdx;
-    size_t part1ptr = endIdx;
-
-    while (part0ptr <= part1ptr) {
-        if (partitionResult[part0ptr - startIdx] == 0) {
-            ++part0ptr;
-        } else {
-            while (part1ptr > startIdx && partitionResult[part1ptr - startIdx] == 1) {
-                --part1ptr;
+        for (size_t i = 0; i < numElements; ++i) {
+            xadj[i + 1] = xadj[i] + adjacencyList[i].size();
+            for (size_t neighbor : adjacencyList[i]) {
+                adjncy.push_back(static_cast<idx_t>(neighbor));
             }
-            if (part0ptr < part1ptr) {
-                std::swap(m_faces[part0ptr], m_faces[part1ptr]);
+        }
+
+        idx_t numParts = 2;
+        std::vector<idx_t> partitionResult(numElements);
+        idx_t edgeCut;
+
+        int result = METIS_PartGraphRecursive(
+            &numElements,           
+            &numConstraints,        
+            xadj.data(),            
+            adjncy.data(),          
+            NULL, NULL, NULL,       
+            &numParts,              
+            NULL, NULL, NULL,      
+            &edgeCut,               
+            partitionResult.data()  
+        );
+
+        if (result != METIS_OK) {
+            std::cerr << "Partitioning failed with error code: " << result << std::endl;
+            return;
+        }
+
+        size_t part0ptr = startIdx;
+        size_t part1ptr = endIdx;
+
+        while (part0ptr <= part1ptr) {
+            if (partitionResult[part0ptr - startIdx] == 0) {
                 ++part0ptr;
-                --part1ptr;
+            } else {
+                while (part1ptr > startIdx && partitionResult[part1ptr - startIdx] == 1) {
+                    --part1ptr;
+                }
+                if (part0ptr < part1ptr) {
+                    std::swap(m_faces[part0ptr], m_faces[part1ptr]);
+                    ++part0ptr;
+                    --part1ptr;
+                }
+            }
+        }
+
+        size_t midIdx = part0ptr;
+        #pragma omp parallel sections
+        {
+            #pragma omp section
+            {
+                HalfEdgeMeshSplitterRecursive(startIdx, midIdx - 1, isParentClusterGroup, depth+1);
+            }
+            #pragma omp section
+            {
+                HalfEdgeMeshSplitterRecursive(midIdx, endIdx, isParentClusterGroup, depth+1);
             }
         }
     }
 
-    size_t midIdx = part0ptr;
+    void HalfEdgeMesh::HalfEdgeMeshSplitter() {
+        m_clusterOffsets.clear();
+        auto start = std::chrono::high_resolution_clock::now();
+        m_clusterGroupOffset.clear();
+        HalfEdgeMeshSplitterRecursive(0, m_faces.size() - 1, false, 0);
+        auto end = std::chrono::high_resolution_clock::now();
+        std::cout << "Mesh Partitioning Time: " << std::chrono::duration_cast<std::chrono::seconds>(end - start).count() << "s" << std::endl;
+        std::cout << "CLusterGroup Offset: ";
+        
+        std::sort(m_clusterGroupOffset.begin(), m_clusterGroupOffset.end());
 
-    #pragma omp parallel sections
-    {
-        #pragma omp section
-        {
-            HalfEdgeMeshSplitterRecursive(startIdx, midIdx - 1);
-        }
-        #pragma omp section
-        {
-            HalfEdgeMeshSplitterRecursive(midIdx, endIdx);
-        }
+        m_clusterGroupOffset.push_back(m_faces.size());
+        for(auto val : m_clusterGroupOffset) std::cout << val << " ";
+        std::cout << std::endl;
+        // start = std::chrono::high_resolution_clock::now();
+        // std::vector<std::vector<size_t>> adjacencyList;
+        // BuildAdjacencyListForCluster(adjacencyList);
+        // ClusterGrouper(adjacencyList, m_clusterGroupResult, m_clusterGroupCount);
+        // end = std::chrono::high_resolution_clock::now();
+        // std::cout << "Cluster Grouping Time: " << std::chrono::duration_cast<std::chrono::seconds>(end - start).count() << "s" << std::endl;
     }
-}
-
-void HalfEdgeMesh::HalfEdgeMeshSplitter() {
-    m_clusterOffsets.clear();
-    auto start = std::chrono::high_resolution_clock::now();
-    HalfEdgeMeshSplitterRecursive(0, m_faces.size() - 1);
-    auto end = std::chrono::high_resolution_clock::now();
-    std::cout << "Mesh Partitioning Time: " << std::chrono::duration_cast<std::chrono::seconds>(end - start).count() << "s" << std::endl;
-
-    start = std::chrono::high_resolution_clock::now();
-    std::vector<std::vector<size_t>> adjacencyList;
-    BuildAdjacencyListForCluster(adjacencyList);
-    ClusterGrouper(adjacencyList, m_clusterGroupResult, m_clusterGroupCount);
-    end = std::chrono::high_resolution_clock::now();
-    std::cout << "Cluster Grouping Time: " << std::chrono::duration_cast<std::chrono::seconds>(end - start).count() << "s" << std::endl;
-}
 
 
 
@@ -269,13 +289,17 @@ void FastQEM(const std::string& lodFolder) {
     std::string tempOutputFolder = lodFolder + "/Temp";
     std::map<std::string, double> fileErrorMap;
 
-    std::filesystem::create_directory(tempOutputFolder);
+    // 创建输出文件夹和临时文件夹
+    std::filesystem::create_directories(tempOutputFolder);
 
     #pragma omp parallel for
     for (int i = 0; i < objFiles.size(); ++i) {
         const auto& objFile = objFiles[i];
         std::string inputPath = objFile.generic_string();
+
+        // 将简化后的文件输出到新的 outputFolder
         std::string tempOutputPath = (std::filesystem::path(tempOutputFolder) / objFile.filename()).generic_string();
+        std::string finalOutputPath = (std::filesystem::path(lodFolder) / objFile.filename()).generic_string();
 
         std::string command = simplifyExe + " " + inputPath + " " + tempOutputPath + " 0.5";
 
@@ -313,25 +337,26 @@ void FastQEM(const std::string& lodFolder) {
             }
         }
 
-        try {
-            std::filesystem::rename(tempOutputPath, inputPath);
-        } catch (const std::exception& e) {
-            std::cerr << "Error replacing file " << inputPath << ": " << e.what() << std::endl;
-        }
+        // try {
+        //     // 将临时文件移动到最终输出文件夹中
+        //     std::filesystem::rename(tempOutputPath, finalOutputPath);
+        // } catch (const std::exception& e) {
+        //     std::cerr << "Error moving file to output folder " << finalOutputPath << ": " << e.what() << std::endl;
+        // }
     }
 
-    std::filesystem::remove_all(tempOutputFolder);
+    // 删除临时文件夹
+    // std::filesystem::remove_all(tempOutputFolder);
 
-    // load it back in as a list of HalfEdgeMeshes
+    // 输出生成的文件信息
     std::vector<HalfEdgeMesh> meshes;
     for (const auto& [filename, error] : fileErrorMap) {
         std::cout << "File: " << filename << ", Total Error: " << error << std::endl;
-        HalfEdgeMesh mesh;
-        mesh.importMesh((std::filesystem::path(lodFolder) / filename).generic_string(), error);
-        meshes.push_back(std::move(mesh));
+        // HalfEdgeMesh mesh;
+        // mesh.importMesh((std::filesystem::path(outputFolder) / filename).generic_string(), error);
+        // meshes.push_back(std::move(mesh));
     }
 }
-
 
 
 

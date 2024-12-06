@@ -337,25 +337,13 @@ void HalfEdgeMesh::exportMeshToObjFiles(const std::string& folderPath) {
         std::filesystem::create_directories(folderPath);
     }
 
-    std::unordered_map<int, std::vector<Face*>> clusterGroupMap;
-
-    for (size_t i = 0; i < m_clusterOffsets.size() - 1; ++i) {
-        size_t startIdx = m_clusterOffsets[i];
-        size_t endIdx = m_clusterOffsets[i + 1];
-        int group = m_clusterGroupResult[i];
-
-        for (size_t j = startIdx; j < endIdx; ++j) {
-            clusterGroupMap[group].push_back(m_faces[j]);
-        }
-    }
-
     #pragma omp parallel for
-    for (size_t idx = 0; idx < clusterGroupMap.size(); ++idx) {
-        auto it = std::next(clusterGroupMap.begin(), idx);
-        const auto& group = it->first;
-        const auto& faces = it->second;
+    for (size_t clusterIndex = 0; clusterIndex < m_clusterGroupOffset.size() - 1; ++clusterIndex) {
+        size_t startIdx = m_clusterGroupOffset[clusterIndex];
+        size_t endIdx = m_clusterGroupOffset[clusterIndex + 1];
 
-        std::string fileName = folderPath + "/clusterGroup_" + std::to_string(group) + ".obj";
+        // 构造文件名
+        std::string fileName = folderPath + "/clusterGroup_" + std::to_string(clusterIndex) + ".obj";
         std::ofstream outFile(fileName);
 
         if (!outFile.is_open()) {
@@ -364,10 +352,13 @@ void HalfEdgeMesh::exportMeshToObjFiles(const std::string& folderPath) {
             continue;
         }
 
+        // 存储唯一顶点
         std::unordered_map<HalfVertex*, size_t> vertexMap;
         size_t vertexIndex = 1;
 
-        for (const auto& face : faces) {
+        // 写入顶点信息
+        for (size_t i = startIdx; i < endIdx; ++i) {
+            const auto& face = m_faces[i];
             const HalfEdge* edge = face->edge;
             do {
                 HalfVertex* vertex = edge->origin;
@@ -379,7 +370,9 @@ void HalfEdgeMesh::exportMeshToObjFiles(const std::string& folderPath) {
             } while (edge != face->edge);
         }
 
-        for (const auto& face : faces) {
+        // 写入面信息
+        for (size_t i = startIdx; i < endIdx; ++i) {
+            const auto& face = m_faces[i];
             outFile << "f";
             const HalfEdge* edge = face->edge;
             do {

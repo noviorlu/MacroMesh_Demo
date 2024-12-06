@@ -9,7 +9,8 @@ using namespace std;
 #include "GeometryNode.hpp"
 #include "JointNode.hpp"
 
-#include "HalfEdgeMesh.hpp"
+// #include "HalfEdgeMesh.hpp"
+#include "SimpleMesh.hpp"
 
 #include <imgui/imgui.h>
 
@@ -20,7 +21,7 @@ using namespace std;
 
 std::string AssetFilePath = "C:/projects/MacroMesh_Demo/clusterLOD/Assets/";
 std::string ModelFilePath = "C:/projects/MacroMesh_Demo/models/";
-
+	
 #ifndef M_PI
     #define M_PI 3.14159265358979323846
 #endif
@@ -70,14 +71,20 @@ void clusterLOD::init()
 
 	processLuaSceneFile(m_luaSceneFile);
 
-	m_meshConsolidator = new Mesh();
-	HalfEdgeMesh heMesh;
-	heMesh.importMesh(ModelFilePath + "bunny/bunny.obj", 0.0f);
-	heMesh.HalfEdgeMeshSplitter();
-	Mesh::s_meshInfoMap[heMesh.m_name] = m_meshConsolidator;
-	heMesh.exportMesh(m_meshConsolidator->m_clusterList, m_meshConsolidator->m_clusterGroupList);
-	heMesh.exportMeshToObjFiles(ModelFilePath + "bunny/LOD1");
-	FastQEM(ModelFilePath + "bunny/LOD1");
+	// m_meshConsolidator = new Mesh();
+	// HalfEdgeMesh heMesh;
+	// heMesh.importMesh(ModelFilePath + "bunny/bunny.obj", 0.0f);
+	// heMesh.HalfEdgeMeshSplitter();
+	// Mesh::s_meshInfoMap[heMesh.m_name] = m_meshConsolidator;
+	// heMesh.exportMesh(m_meshConsolidator->m_clusterList, m_meshConsolidator->m_clusterGroupList);
+	// heMesh.exportMeshToObjFiles(ModelFilePath + "bunny/LOD1");
+	// FastQEM(ModelFilePath + "bunny/LOD1");
+	// exit(0);
+
+	SimpleMesh sMesh;
+	sMesh.partition_loop(ModelFilePath + "suzanne.obj", ModelFilePath + "/LOD1");
+
+	exit(0);
 
 	// Acquire the MeshInfoMap from the Mesh.
 	m_meshConsolidator->uploadToGPU();

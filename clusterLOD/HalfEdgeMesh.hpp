@@ -12,7 +12,6 @@
 
 #include <chrono>
 
-
 struct HalfVertex;
 struct HalfEdge;
 struct Face;
@@ -159,10 +158,13 @@ public:
     void HalfEdgeMeshSplitter();
     void HalfEdgeMeshSplitterRecursive(
         size_t startIdx,
-        size_t endIdx
+        size_t endIdx,
+        bool isParentClusterGroup,
+        int depth
     );
 
     std::vector<size_t> m_clusterOffsets;
+    std::vector<size_t> m_clusterGroupOffset;
     std::vector<size_t> m_clusterGroupResult; // same size as m_clusterOffsets
     int m_clusterGroupCount = 0;
 /// Debugging functions
