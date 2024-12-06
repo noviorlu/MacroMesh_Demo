@@ -389,9 +389,9 @@ public:
 			double threshold = 0.000000001*pow(double(iteration+3),agressiveness);
 
 			// target number of triangles reached ? Then break
-			if ((verbose) && (iteration%5==0)) {
-				printf("iteration %d - triangles %d threshold %g total_error %g\n", iteration, triangle_count - deleted_triangles, threshold, total_error);
-			}
+			// if ((verbose) && (iteration%5==0)) {
+			// 	printf("iteration %d - triangles %d threshold %g total_error %g\n", iteration, triangle_count - deleted_triangles, threshold, total_error);
+			// }
 
 			// remove vertices & mark deleted triangles
 			loopi(0,triangles.size())

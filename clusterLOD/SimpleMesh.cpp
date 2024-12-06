@@ -167,9 +167,9 @@ void SimpleMesh::exportMesh(const std::string& objFilePath, int clusterId) {
 void SimpleMesh::splitterRecur(int startIdx, int endIdx, int depth){
     size_t triCount = endIdx - startIdx + 1;
 
-    if(triCount <= MAX_TRI_IN_CLUSTERGROUP){
+    if(triCount <= MAX_TRI_IN_CLUSTER){
         #pragma omp critical
-        m_clusterGroupOffsets.push_back(startIdx);
+        m_clusterOffsets.push_back(startIdx);
         return;
     }
     
@@ -233,7 +233,6 @@ void SimpleMesh::splitterRecur(int startIdx, int endIdx, int depth){
 		if (partitionResult[ptr1] == 1) ptr1--;
    }
 
-	adj_list.clear();
 	xadj.clear();
 	adjncy.clear();
 	partitionResult.clear();
@@ -257,6 +256,9 @@ void SimpleMesh::splitter(){
     m_clusterGroupOffsets.push_back(m_faces.size());
 }
 
+void SimpleMesh::grouper(){
+
+}
 
 
 void SimpleMesh::partition_loop(const std::string& objFilePath, const std::string& lodFolderPath){
@@ -271,13 +273,13 @@ void SimpleMesh::partition_loop(const std::string& objFilePath, const std::strin
 	m_clusterGroupOffsets.clear();
 	m_clusterOffsets.clear();
 
-    // starttime = std::chrono::high_resolution_clock::now();
-    // splitter();
-    // endtime = std::chrono::high_resolution_clock::now();
-    // std::cout << "Splitter Time: " 
-    //           << std::fixed << std::setprecision(5)
-    //           << std::chrono::duration<double>(endtime - starttime).count()
-    //           << "s" << std::endl;
+    starttime = std::chrono::high_resolution_clock::now();
+    splitter();
+    endtime = std::chrono::high_resolution_clock::now();
+    std::cout << "Splitter Time: " 
+              << std::fixed << std::setprecision(5)
+              << std::chrono::duration<double>(endtime - starttime).count()
+              << "s" << std::endl;
 
     // starttime = std::chrono::high_resolution_clock::now();
     // exportClusterGroup(lodFolderPath);
@@ -287,7 +289,26 @@ void SimpleMesh::partition_loop(const std::string& objFilePath, const std::strin
     //           << std::chrono::duration<double>(endtime - starttime).count()
     //           << "s" << std::endl;
 
-    QEM(0, m_faces.size() - 1, lodFolderPath, 0.5);
+    // QEM(0, m_faces.size() - 1, lodFolderPath, 0.5);
+    starttime = std::chrono::high_resolution_clock::now();
+    if (!std::filesystem::exists(lodFolderPath)) {
+        std::filesystem::create_directories(lodFolderPath);
+    }
+
+    #pragma omp parallel for
+    for (size_t clusterIndex = 0; clusterIndex < m_clusterGroupOffsets.size() - 1; ++clusterIndex) {
+        size_t startIdx = m_clusterGroupOffsets[clusterIndex];
+        size_t endIdx = m_clusterGroupOffsets[clusterIndex + 1] - 1;
+
+        // construct file name
+        std::string fileName = lodFolderPath + "/clusterGroup_" + std::to_string(clusterIndex) + ".obj";
+        QEM(startIdx, endIdx, fileName, 0.5);
+    }
+    endtime = std::chrono::high_resolution_clock::now();
+    std::cout << "QEM Cluster Group + Export Time: " 
+            << std::fixed << std::setprecision(5)
+            << std::chrono::duration<double>(endtime - starttime).count()
+            << "s" << std::endl;
 }
 
 
@@ -349,9 +370,9 @@ void SimpleMesh::exportMeshSimplifier(MeshSimplifier& simplifier, int startIdx, 
     }
 }
 
-float SimpleMesh::QEM(int start, int end, const std::string& lodFolderPath, float ratio = 0.5) {
+float SimpleMesh::QEM(int start, int end, const std::string& objFilePath, float ratio = 0.5) {
     MeshSimplifier simplifier;
-    exportMeshSimplifier(simplifier, 0, m_faces.size() - 1);
+    exportMeshSimplifier(simplifier, start, end);
 
     int target_count = simplifier.triangles.size() >> 1;
 
@@ -375,13 +396,13 @@ float SimpleMesh::QEM(int start, int end, const std::string& lodFolderPath, floa
         return EXIT_FAILURE;
     }
 
-    simplifier.write_obj((lodFolderPath + "/QEMcluster.obj").c_str());
+    simplifier.write_obj((objFilePath).c_str());
 
+    #pragma omp critical
     std::cout << "Output: " << simplifier.vertices.size() << " vertices, " << simplifier.triangles.size() 
               << " triangles (" << (float)simplifier.triangles.size() / (float)startSize 
-              << " reduction; " << ((float)(clock() - start)) / CLOCKS_PER_SEC << " sec)" << std::endl;
-    std::cout << "Total error: " << simplifier.total_error << std::endl;
-
+              << " reduction; " << ((float)(clock() - start)) / CLOCKS_PER_SEC << " sec)"
+              << "Total error: " << simplifier.total_error << std::endl;
     return simplifier.total_error;
 }
 

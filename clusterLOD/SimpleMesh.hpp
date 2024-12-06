@@ -27,6 +27,7 @@ public:
     std::unordered_set<SimpleFace*> adjacentFace;
     SimpleFace(SimpleVertex* v1, SimpleVertex* v2, SimpleVertex* v3) : v1(v1), v2(v2), v3(v3) {
         omp_init_lock(&lock);
+		adjacentFace = std::unordered_set<SimpleFace*>();
     }
 
     int clusterId;
@@ -70,6 +71,8 @@ public:
     std::vector<SimpleVertex> m_vertices;
     std::vector<SimpleFace> m_faces;
 
+    std::vector<std::pair<SimpleVertex*, SimpleVertex*>> m_boundary;
+
     void importMesh(const std::string& objFilePath);
     void exportMesh(int startIdx, int endIdx, const std::string& objFilePath);
     void exportMesh(const std::string& objFilePath, int clusterId);
@@ -77,6 +80,7 @@ public:
 
     void splitterRecur(int start, int end, int depth);
     void splitter();
+    void grouper();
 
     void exportMeshSimplifier(MeshSimplifier& simplifier, int startIdx, int endIdx);
     float QEM(int start, int end, const std::string& lodFolderPath, float ratio);
@@ -84,7 +88,7 @@ public:
 
     void partition_loop(const std::string& objFilePath, const std::string& lodFolderPath);
 
-    std::vector<int> m_clusterGroupOffsets;
     std::vector<int> m_clusterOffsets;
+    std::vector<int> m_clusterGroupOffsets;
 };
 
