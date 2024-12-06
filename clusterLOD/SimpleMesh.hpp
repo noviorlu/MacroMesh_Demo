@@ -24,7 +24,7 @@ public:
     SimpleVertex* v1;
     SimpleVertex* v2;
     SimpleVertex* v3;
-    std::vector<SimpleFace*> adjacentFace;
+    std::unordered_set<SimpleFace*> adjacentFace;
     SimpleFace(SimpleVertex* v1, SimpleVertex* v2, SimpleVertex* v3) : v1(v1), v2(v2), v3(v3) {}
 
     int clusterId;
@@ -36,20 +36,16 @@ public:
 		std::swap(a.v2, b.v2);
 		std::swap(a.v3, b.v3);
 
-        for (auto* AadjFace : a.adjacentFace) {
-            for (int i = 0; i < AadjFace->adjacentFace.size(); i++) {
-                if (AadjFace->adjacentFace[i] == &a) {
-                    AadjFace->adjacentFace[i] = &b;
-                }
-            }
+        for (SimpleFace* AadjFace : a.adjacentFace) {
+			std::unordered_set<SimpleFace*>& adjAadj = AadjFace->adjacentFace;
+            adjAadj.erase(&a);
+            adjAadj.insert(&b);
         }
         
         for (auto* BadjFace : b.adjacentFace) {
-            for (int i = 0; i < BadjFace->adjacentFace.size(); i++) {
-                if (BadjFace->adjacentFace[i] == &b) {
-                    BadjFace->adjacentFace[i] = &a;
-                }
-            }
+            std::unordered_set<SimpleFace*>& adjBadj = BadjFace->adjacentFace;
+            adjBadj.erase(&b);
+            adjBadj.insert(&a);
         }
 
 		std::swap(a.adjacentFace, b.adjacentFace);
@@ -71,8 +67,11 @@ public:
     void splitterRecur(int start, int end, int depth);
     void splitter();
 
+    float QEM(int start, int end, int ratio);
+
     void partition_loop(const std::string& objFilePath, const std::string& lodFolderPath);
 
     std::vector<int> m_clusterGroupOffsets;
+    std::vector<int> m_clusterOffsets;
 };
 

@@ -82,7 +82,7 @@ void clusterLOD::init()
 	// exit(0);
 
 	SimpleMesh sMesh;
-	sMesh.partition_loop(ModelFilePath + "suzanne.obj", ModelFilePath + "/LOD1");
+	sMesh.partition_loop(ModelFilePath + "bunny/bunny.obj", ModelFilePath + "bunny/LOD1");
 
 	exit(0);
 

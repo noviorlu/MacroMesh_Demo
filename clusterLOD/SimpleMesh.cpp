@@ -2,6 +2,8 @@
 
 #include "cs488-framework/ObjFileDecoder.hpp"
 
+#include "QEM/Simplify.h"
+
 #include <metis.h>
 #include <filesystem>
 #include <fstream>
@@ -70,158 +72,50 @@ void SimpleMesh::importMesh(const std::string& objFilePath) {
     for(auto& edge : edgeMap){
         auto& faces = edge.second;
         for(int i = 0; i < faces.size(); i++){
-            for(int j = 0; j < faces.size(); j++){
-				if (i == j) continue;
-                faces[i]->adjacentFace.push_back(faces[j]);
-                faces[j]->adjacentFace.push_back(faces[i]);
+            for(int j = i+1; j < faces.size(); j++){
+                faces[i]->adjacentFace.insert(faces[j]);
+                faces[j]->adjacentFace.insert(faces[i]);
             }
         }
     }
 }
 
-void SimpleMesh::splitterRecur(int startIdx, int endIdx, int depth){
-	if (depth == 1) {
-		m_clusterGroupOffsets.push_back(startIdx);
-		return;
-	}
-    
-    size_t triCount = endIdx - startIdx + 1;
-
-    //if(triCount <= MAX_TRI_IN_CLUSTERGROUP){
-    //    //#pragma omp critical
-    //    m_clusterGroupOffsets.push_back(startIdx);
-    //    return;
-    //}
-    
-    std::vector<std::vector<size_t>> adj_list;
-    adj_list.resize(triCount);
-
-    for (int i = 0; i < triCount; i++) {
-        for (auto adjFace : m_faces[i + startIdx].adjacentFace) {
-            int faceIdx = adjFace - &m_faces[0];
-			if (faceIdx >= startIdx && faceIdx <= endIdx)
-				adj_list[i].push_back(faceIdx - startIdx);
-        }
-    }
-
-    // METIS partitioning
-
-    size_t totalEdges = 0;
-    for (size_t i = 0; i < triCount; ++i) {
-        totalEdges += adj_list[i].size();
-    }
-
-    idx_t numConstraints = 1;
-    std::vector<idx_t> xadj(triCount + 1, 0);
-    std::vector<idx_t> adjncy(totalEdges);
-
-    for (size_t i = 0; i < triCount; ++i) {
-        xadj[i + 1] = xadj[i] + adj_list[i].size();
-        for (size_t neighbor : adj_list[i]) {
-            adjncy.push_back(static_cast<idx_t>(neighbor));
-        }
-    }
-
-    idx_t numParts = 2;
-    std::vector<idx_t> partitionResult(triCount);
-    idx_t edgeCut;
-
-    int result = METIS_PartGraphRecursive(
-        reinterpret_cast<idx_t*>(&triCount),           
-        &numConstraints,        
-        xadj.data(),            
-        adjncy.data(), 
-        NULL, NULL, NULL,
-        &numParts,              
-        NULL, NULL, NULL,      
-        &edgeCut,               
-        partitionResult.data()  
-    );
-    if (result != METIS_OK) { assert(false); }
-
-    int ptr0 = 0;
-    int ptr1 = partitionResult.size()-1;
-    int lastZero = ptr0;
-    while (ptr0 <= ptr1) {
-        if (partitionResult[ptr0] == 1 && partitionResult[ptr1] == 0) {
-            std::swap(partitionResult[ptr0], partitionResult[ptr1]);
-            SimpleFace::swap(m_faces[ptr0 + startIdx], m_faces[ptr1 + startIdx]);
-            lastZero = ptr0;
-        }
-        if (partitionResult[ptr0] == 0) {
-            lastZero = ptr0;
-            ptr0++;
-        }
-		if (partitionResult[ptr1] == 1) ptr1--;
-    }
-
-	adj_list.clear();
-	xadj.clear();
-	adjncy.clear();
-	partitionResult.clear();
-
-
-    size_t midIdx = lastZero;
-    //#pragma omp parallel sections
-    {
-        //#pragma omp section
-        {splitterRecur(startIdx, midIdx, depth+1);}
-
-        //#pragma omp section
-        {splitterRecur(midIdx+1, endIdx, depth+1);}
-    }
-}
-
-void SimpleMesh::splitter(){
-    m_clusterGroupOffsets.clear();
-    splitterRecur(0, m_faces.size() - 1, 0);
-    std::sort(m_clusterGroupOffsets.begin(), m_clusterGroupOffsets.end());
-    m_clusterGroupOffsets.push_back(m_faces.size());
-}
-
-void SimpleMesh::exportClusterGroup(const std::string& lodFolderPath){
+void SimpleMesh::exportClusterGroup(const std::string& lodFolderPath) {
     if (!std::filesystem::exists(lodFolderPath)) {
         std::filesystem::create_directories(lodFolderPath);
     }
 
-    // print clusterGroupResults
-	std::cout << "ClusterGroupOffsets: ";
-	for (size_t i = 0; i < m_clusterGroupOffsets.size(); ++i) {
-		std::cout << m_clusterGroupOffsets[i] << " ";
-	}
-	std::cout << std::endl;
-
-    //#pragma omp parallel for
+#pragma omp parallel for
     for (size_t clusterIndex = 0; clusterIndex < m_clusterGroupOffsets.size() - 1; ++clusterIndex) {
         size_t startIdx = m_clusterGroupOffsets[clusterIndex];
         size_t endIdx = m_clusterGroupOffsets[clusterIndex + 1] - 1;
 
         // construct file name
         std::string fileName = lodFolderPath + "/clusterGroup_" + std::to_string(clusterIndex) + ".obj";
-		exportMesh(startIdx, endIdx, fileName);
+        exportMesh(startIdx, endIdx, fileName);
     }
 }
 
 void SimpleMesh::exportMesh(int startIdx, int endIdx, const std::string& objFilePath) {
     std::ofstream outFile(objFilePath);
     if (!outFile.is_open()) {
-        //#pragma omp critical
+#pragma omp critical
         std::cerr << "Failed to open file: " << objFilePath << std::endl;
         return;
     }
 
     int vertexCount = 1;
     std::unordered_map<SimpleVertex*, int> vertexMapping;
-	std::vector<SimpleVertex*> vertices;
-	vertexMapping.reserve(endIdx - startIdx + 1);
-	vertices.reserve(endIdx - startIdx + 1);
+    std::vector<SimpleVertex*> vertices;
+    vertexMapping.reserve(endIdx - startIdx + 1);
+    vertices.reserve(endIdx - startIdx + 1);
     auto createVertexMapping = [&](SimpleVertex* v) {
         if (vertexMapping.find(v) == vertexMapping.end()) {
-			vertices.push_back(v);
+            vertices.push_back(v);
             vertexMapping[v] = vertexCount;
             vertexCount++;
         }
-    };
+        };
     for (int i = startIdx; i <= endIdx; i++) {
         const SimpleFace& face = m_faces[i];
         createVertexMapping(face.v1);
@@ -251,26 +145,142 @@ void SimpleMesh::exportMesh(const std::string& objFilePath, int clusterId) {
         return;
     }
 
-	for (const auto& vertex : m_vertices) {
-		outFile << "v " << vertex.position.x << " " << vertex.position.y << " " << vertex.position.z << std::endl;
-		outFile << "vn " << vertex.normal.x << " " << vertex.normal.y << " " << vertex.normal.z << std::endl;
-		outFile << "vt " << vertex.uv.x << " " << vertex.uv.y << std::endl;
-	}
+    for (const auto& vertex : m_vertices) {
+        outFile << "v " << vertex.position.x << " " << vertex.position.y << " " << vertex.position.z << std::endl;
+        outFile << "vn " << vertex.normal.x << " " << vertex.normal.y << " " << vertex.normal.z << std::endl;
+        outFile << "vt " << vertex.uv.x << " " << vertex.uv.y << std::endl;
+    }
 
-	for (const auto& face : m_faces) {
-		if (face.clusterId != clusterId) {
-			continue;
-		}
-		int v1 = face.v1 - &m_vertices[0] + 1;
-		int v2 = face.v2 - &m_vertices[0] + 1;
-		int v3 = face.v3 - &m_vertices[0] + 1;
-		outFile << "f " << v1 << "/" << v1 << "/" << v1 << " " << v2 << "/" << v2 << "/" << v2 << " " << v3 << "/" << v3 << "/" << v3 << std::endl;
-	}
+    for (const auto& face : m_faces) {
+        if (face.clusterId != clusterId) {
+            continue;
+        }
+        int v1 = face.v1 - &m_vertices[0] + 1;
+        int v2 = face.v2 - &m_vertices[0] + 1;
+        int v3 = face.v3 - &m_vertices[0] + 1;
+        outFile << "f " << v1 << "/" << v1 << "/" << v1 << " " << v2 << "/" << v2 << "/" << v2 << " " << v3 << "/" << v3 << "/" << v3 << std::endl;
+    }
 }
 
+
+
+void SimpleMesh::splitterRecur(int startIdx, int endIdx, int depth){
+    size_t triCount = endIdx - startIdx + 1;
+
+    if(triCount <= MAX_TRI_IN_CLUSTERGROUP){
+        #pragma omp critical
+        m_clusterGroupOffsets.push_back(startIdx);
+        return;
+    }
+    
+    std::vector<std::vector<size_t>> adj_list;
+    adj_list.resize(triCount);
+
+    for (int i = 0; i < triCount; i++) {
+        for (auto adjFace : m_faces[i + startIdx].adjacentFace) {
+            int faceIdx = adjFace - &m_faces[0];
+			if (faceIdx >= startIdx && faceIdx <= endIdx)
+				adj_list[i].push_back(faceIdx - startIdx);
+        }
+    }
+
+    // METIS partitioning
+    idx_t numConstraints = 1;
+    std::vector<idx_t> xadj(triCount + 1, 0);
+    std::vector<idx_t> adjncy;
+
+    for (size_t i = 0; i < triCount; ++i) {
+        xadj[i + 1] = xadj[i] + adj_list[i].size();
+        for (size_t neighbor : adj_list[i]) {
+            adjncy.push_back(static_cast<idx_t>(neighbor));
+        }
+    }
+
+    idx_t numParts = 2;
+    std::vector<idx_t> partitionResult(triCount);
+    idx_t edgeCut;
+
+    int result = METIS_PartGraphRecursive(
+        reinterpret_cast<idx_t*>(&triCount),           
+        &numConstraints,        
+        xadj.data(),            
+        adjncy.data(), 
+        NULL, NULL, NULL,
+        &numParts,              
+        NULL, NULL, NULL,      
+        &edgeCut,               
+        partitionResult.data()  
+    );
+    if (result != METIS_OK) { assert(false); }
+
+    for(int i = 0; i < triCount; i++){
+        m_faces[i + startIdx].clusterId = partitionResult[i];
+    }
+
+   int ptr0 = 0;
+   int ptr1 = triCount-1;
+   int lastZero = ptr0;
+   while (ptr0 <= ptr1) {
+       if (partitionResult[ptr0] == 1 && partitionResult[ptr1] == 0) {
+           std::swap(partitionResult[ptr0], partitionResult[ptr1]);
+           SimpleFace::swap(m_faces[ptr0 + startIdx], m_faces[ptr1 + startIdx]);
+           lastZero = ptr0;
+       }
+       if (partitionResult[ptr0] == 0) {
+           lastZero = ptr0;
+           ptr0++;
+       }
+		if (partitionResult[ptr1] == 1) ptr1--;
+   }
+
+	adj_list.clear();
+	xadj.clear();
+	adjncy.clear();
+	partitionResult.clear();
+
+
+   size_t midIdx = lastZero + startIdx;
+   #pragma omp parallel sections
+   {
+       #pragma omp section
+       {splitterRecur(startIdx, midIdx, depth+1);}
+
+       #pragma omp section
+       {splitterRecur(midIdx+1, endIdx, depth+1);}
+   }
+}
+
+void SimpleMesh::splitter(){
+    m_clusterGroupOffsets.clear();
+    splitterRecur(0, m_faces.size() - 1, 0);
+    std::sort(m_clusterGroupOffsets.begin(), m_clusterGroupOffsets.end());
+    m_clusterGroupOffsets.push_back(m_faces.size());
+}
+
+
+
 void SimpleMesh::partition_loop(const std::string& objFilePath, const std::string& lodFolderPath){
+    auto starttime = std::chrono::high_resolution_clock::now();
     importMesh(objFilePath);
+    auto endtime = std::chrono::high_resolution_clock::now();
+    std::cout << "Import Mesh Time: " << std::chrono::duration_cast<std::chrono::seconds>(endtime - starttime).count() << "s" << std::endl;
+
+	m_clusterGroupOffsets.clear();
+	m_clusterOffsets.clear();
+
+    starttime = std::chrono::high_resolution_clock::now();
     splitter();
+    endtime = std::chrono::high_resolution_clock::now();
+    std::cout << "Splitter Time: " << std::chrono::duration_cast<std::chrono::seconds>(endtime - starttime).count() << "s" << std::endl;
+
+    starttime = std::chrono::high_resolution_clock::now();
     exportClusterGroup(lodFolderPath);
-	//exportMesh(0, m_faces.size() - 1, lodFolderPath + "/clusterGroup_0.obj");
+    endtime = std::chrono::high_resolution_clock::now();
+    std::cout << "Export Cluster Group Time: " << std::chrono::duration_cast<std::chrono::seconds>(endtime - starttime).count() << "s" << std::endl;
+}
+
+
+
+void SimpleMesh::QEM(int start, int end, int ratio = 0.5) {
+
 }
