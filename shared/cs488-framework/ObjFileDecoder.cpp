@@ -10,7 +10,6 @@ using namespace glm;
 using namespace std;
 
 #include "cs488-framework/Exception.hpp"
-#include "cs488-framework/Vertex.hpp"
 
 //---------------------------------------------------------------------------------------
 void ObjFileDecoder::decode(

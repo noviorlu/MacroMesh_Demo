@@ -1,10 +1,7 @@
 #pragma once
 
 #include <glm/glm.hpp>
-
 #include <functional>
-
-using namespace glm;
 
 struct Vertex {
     glm::vec3 position;
@@ -60,10 +57,7 @@ namespace std {
     template <typename T1, typename T2>
     struct hash<std::pair<T1, T2>> {
         std::size_t operator()(const std::pair<T1, T2>& pair) const {
-            T1 smaller = std::min(pair.first, pair.second);
-            T2 larger = std::max(pair.first, pair.second);
-
-            return std::hash<T1>()(smaller) ^ (std::hash<T2>()(larger) << 1);
+            return std::hash<T1>()(pair.first) ^ (std::hash<T2>()(pair.second) << 1);
         }
     };
 }

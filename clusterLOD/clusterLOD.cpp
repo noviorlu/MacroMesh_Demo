@@ -81,8 +81,10 @@ void clusterLOD::init()
 	// FastQEM(ModelFilePath + "bunny/LOD1");
 	// exit(0);
 
-	SimpleMesh sMesh;
-	sMesh.partition_loop(ModelFilePath + "bunny/bunny.obj", ModelFilePath + "bunny/LOD1");
+	LodMeshes sMeshes;
+	SimpleMesh* sMesh = new SimpleMesh();
+	sMeshes.push_back(sMesh);
+	SimpleMesh::partition_loop(sMeshes, ModelFilePath + "suzanne.obj", ModelFilePath + "LOD1");
 
 	exit(0);
 

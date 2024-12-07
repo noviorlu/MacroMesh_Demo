@@ -2,10 +2,17 @@
 
 #include "cs488-framework/ObjFileDecoder.hpp"
 
+#pragma push_macro("min")
+#pragma push_macro("max")
+#undef min
+#undef max
 #include "QEM/Simplify.hpp"
+#pragma pop_macro("min")
+#pragma pop_macro("max")
 
 #include <metis.h>
 #include <filesystem>
+#include <functional>
 #include <fstream>
 #include <iostream>
 
@@ -13,42 +20,39 @@
 #define MAX_CLUSTER_IN_CLUSTERGROUP 32
 #define MAX_TRI_IN_CLUSTERGROUP (MAX_TRI_IN_CLUSTER * MAX_CLUSTER_IN_CLUSTERGROUP)
 
+SimpleVertex* SimpleMesh::createVertex(glm::vec3 position, glm::vec3 normal, glm::vec2 uv) {
+    if (m_vertexMap.find(position) == m_vertexMap.end()) {
+        m_vertices.emplace_back(position, normal, uv);
+        m_vertexMap[position] = &m_vertices.back();
+    }
+    return m_vertexMap[position];
+}
+
+void SimpleMesh::createEdge(SimpleVertex* v1, SimpleVertex* v2, SimpleFace* face) {
+    if (v1 > v2) std::swap(v1, v2);
+    auto edge = std::make_pair(v1, v2);
+    if (m_edgeMap.find(edge) == m_edgeMap.end()) {
+        m_edgeMap[edge] = std::vector<SimpleFace*>();
+    }
+    m_edgeMap[edge].push_back(face);
+}
+
 void SimpleMesh::importMesh(const std::string& objFilePath) {
-	
     std::vector<glm::vec3> positions;
     std::vector<glm::vec3> normals;
     std::vector<glm::vec2> uvCoords;
-
     ObjFileDecoder::decode(objFilePath.c_str(), m_name, positions, normals, uvCoords);
-
-    std::unordered_map<std::pair<SimpleVertex*, SimpleVertex*>, std::vector<SimpleFace*>> edgeMap;
-    std::unordered_map<glm::vec3, SimpleVertex*> vertexMap;
+    
     std::function<SimpleVertex*(int)> createVertex;
     if (!uvCoords.empty()) {
         createVertex = [&](int i) -> SimpleVertex* {
-            if (vertexMap.find(positions[i]) == vertexMap.end()) {
-                m_vertices.emplace_back(positions[i], normals[i], uvCoords[i]);
-                vertexMap[positions[i]] = &m_vertices.back();
-            }
-            return vertexMap[positions[i]];
+            return SimpleMesh::createVertex(positions[i], normals[i], uvCoords[i]);
         };
     } else {
         createVertex = [&](int i) -> SimpleVertex* {
-            if (vertexMap.find(positions[i]) == vertexMap.end()) {
-                m_vertices.emplace_back(positions[i], normals[i], glm::vec2(0));
-                vertexMap[positions[i]] = &m_vertices.back();
-            }
-            return vertexMap[positions[i]];
+            return SimpleMesh::createVertex(positions[i], normals[i], glm::vec2(0.0f));
         };
     }
-    auto createEdge = [&](SimpleVertex* v1, SimpleVertex* v2, SimpleFace* face) {
-        if(v1 > v2) std::swap(v1, v2);
-        auto edge = std::make_pair(v1, v2);
-        if(edgeMap.find(edge) == edgeMap.end()){
-            edgeMap[edge] = std::vector<SimpleFace*>();
-        }
-        edgeMap[edge].push_back(face);
-    };
 
     m_faces.clear();
     m_vertices.clear();
@@ -70,7 +74,7 @@ void SimpleMesh::importMesh(const std::string& objFilePath) {
     }
 
     // construct AdjacentFaces in all SimpleFace
-    for(auto& edge : edgeMap){
+    for(auto& edge : m_edgeMap){
         auto& faces = edge.second;
         for(int i = 0; i < faces.size(); i++){
             for(int j = i+1; j < faces.size(); j++){
@@ -79,6 +83,14 @@ void SimpleMesh::importMesh(const std::string& objFilePath) {
             }
         }
     }
+
+    m_vertexMap.clear();
+    m_edgeMap.clear();
+
+    m_clusterGroupOffsets.push_back(0);
+    m_clusterGroupOffsets.push_back(m_faces.size());
+
+    m_clusterGroupErrors.push_back(0);
 }
 
 void SimpleMesh::exportMesh(int startIdx, int endIdx, const std::string& objFilePath) {
@@ -242,8 +254,8 @@ void SimpleMesh::exportClusterGroup(const std::string& lodFolderPath) {
 
 void SimpleMesh::splitterRecur(unsigned int startIdx, unsigned int endIdx, int depth){
     size_t triCount = endIdx - startIdx + 1;
-    // if(triCount <= MAX_TRI_IN_CLUSTER){
-    if(depth == 3){
+     if(triCount <= MAX_TRI_IN_CLUSTER){
+    //if(depth == 3){
         #pragma omp critical
         m_clusterOffsets.push_back(startIdx);
         return;
@@ -356,8 +368,8 @@ void SimpleMesh::splitter(){
 void SimpleMesh::grouperRecur(unsigned int startIdx, unsigned int endIdx, int depth){
     size_t clusterCount = endIdx - startIdx + 1;
     
-    if(clusterCount <= 1){
-    // if(clusterCount <= MAX_CLUSTER_IN_CLUSTERGROUP){
+    //if(clusterCount <= 1){
+     if(clusterCount <= MAX_CLUSTER_IN_CLUSTERGROUP){
         #pragma omp critical
         m_clusterGroupOffsets.push_back(startIdx);
         return;
@@ -442,36 +454,31 @@ void SimpleMesh::grouper(){
     m_clusterGroupOffsets.push_back(m_clusters.size());
 }
 
-void SimpleMesh::partition_loop(const std::string& objFilePath, const std::string& lodFolderPath){
-    auto starttime = std::chrono::high_resolution_clock::now();
-    importMesh(objFilePath);
-    auto endtime = std::chrono::high_resolution_clock::now();
-    std::cout << "Import Mesh Time: " 
-              << std::fixed << std::setprecision(5)
-              << std::chrono::duration<double>(endtime - starttime).count()
-              << "s" << std::endl;
+void SimpleMesh::partition_loop(LodMeshes& lodMesh, const std::string& objFilePath, const std::string& lodFolderPath) {
+    SimpleMesh& srcMesh = *lodMesh[0];
 
-	m_clusterGroupOffsets.clear();
-	m_clusterOffsets.clear();
+    auto starttime = std::chrono::high_resolution_clock::now();
+    srcMesh.importMesh(objFilePath);
+    auto endtime = std::chrono::high_resolution_clock::now();
+    std::cout << "Import Mesh Time: "
+        << std::fixed << std::setprecision(5)
+        << std::chrono::duration<double>(endtime - starttime).count()
+        << "s" << std::endl;
+
+    srcMesh.m_clusterGroupOffsets.clear();
+    srcMesh.m_clusterOffsets.clear();
+
 
     starttime = std::chrono::high_resolution_clock::now();
-    splitter();
+    srcMesh.splitter();
     endtime = std::chrono::high_resolution_clock::now();
     std::cout << "Splitter Time: " 
               << std::fixed << std::setprecision(5)
               << std::chrono::duration<double>(endtime - starttime).count()
               << "s" << std::endl;
-    
-    starttime = std::chrono::high_resolution_clock::now();
-    exportCluster(lodFolderPath);
-    endtime = std::chrono::high_resolution_clock::now();
-        std::cout << "Export Cluster Time: " 
-              << std::fixed << std::setprecision(5)
-              << std::chrono::duration<double>(endtime - starttime).count()
-              << "s" << std::endl;
 
     starttime = std::chrono::high_resolution_clock::now();
-    grouper();
+    srcMesh.grouper();
     endtime = std::chrono::high_resolution_clock::now();
     std::cout << "Grouper Time: " 
               << std::fixed << std::setprecision(5)
@@ -479,168 +486,191 @@ void SimpleMesh::partition_loop(const std::string& objFilePath, const std::strin
               << "s" << std::endl;
 
     starttime = std::chrono::high_resolution_clock::now();
-    exportClusterGroup(lodFolderPath);
+    srcMesh.exportClusterGroup(lodFolderPath);
     endtime = std::chrono::high_resolution_clock::now();
         std::cout << "Export Cluster Group Time: " 
               << std::fixed << std::setprecision(5)
               << std::chrono::duration<double>(endtime - starttime).count()
               << "s" << std::endl;
 
-    // QEM(0, m_faces.size() - 1, lodFolderPath, 0.5);
-    // starttime = std::chrono::high_resolution_clock::now();
-    // if (!std::filesystem::exists(lodFolderPath)) {
-    //     std::filesystem::create_directories(lodFolderPath);
-    // }
+	lodMesh.push_back(new SimpleMesh());
+	SimpleMesh& targetMesh = *lodMesh[1];
+    starttime = std::chrono::high_resolution_clock::now();
+    srcMesh.QEM(targetMesh, lodFolderPath, 0.5);
+    endtime = std::chrono::high_resolution_clock::now();
+    std::cout << "QEM Cluster Group + Export Time: " 
+            << std::fixed << std::setprecision(5)
+            << std::chrono::duration<double>(endtime - starttime).count()
+            << "s" << std::endl;
 
-    // #pragma omp parallel for
-    // for (size_t clusterIndex = 0; clusterIndex < m_clusterGroupOffsets.size() - 1; ++clusterIndex) {
-    //     size_t startIdx = m_clusterGroupOffsets[clusterIndex];
-    //     size_t endIdx = m_clusterGroupOffsets[clusterIndex + 1] - 1;
-
-    //     // construct file name
-    //     std::string fileName = lodFolderPath + "/clusterGroup_" + std::to_string(clusterIndex) + ".obj";
-    //     QEM(startIdx, endIdx, fileName, 0.5);
-    // }
-    // endtime = std::chrono::high_resolution_clock::now();
-    // std::cout << "QEM Cluster Group + Export Time: " 
-    //         << std::fixed << std::setprecision(5)
-    //         << std::chrono::duration<double>(endtime - starttime).count()
-    //         << "s" << std::endl;
+    starttime = std::chrono::high_resolution_clock::now();
+    targetMesh.exportClusterGroup(lodFolderPath);
+    endtime = std::chrono::high_resolution_clock::now();
+    std::cout << "exportClusterGroup Time: " 
+            << std::fixed << std::setprecision(5)
+            << std::chrono::duration<double>(endtime - starttime).count()
+            << "s" << std::endl;
 }
 
 
-void SimpleMesh::exportMeshSimplifier(MeshSimplifier& simplifier, int startIdx, int endIdx) {
+void SimpleMesh::exportMeshSimplifier(MeshSimplifier& simplifier, const std::vector<std::pair<int, int>>& indexRanges) {
     simplifier.vertices.clear();
     simplifier.triangles.clear();
     simplifier.refs.clear();
 
-    std::unordered_map<int, int> vertexIndexMap;
+    std::unordered_map<SimpleVertex*, int> vertexIndexMap;
     int simplifierVertexIndex = 0;
+    auto createVertex = [&](SimpleVertex* vertex) {
+        if (vertexIndexMap.find(vertex) == vertexIndexMap.end()) {
+            MeshSimplifier::Vertex simplifiedVertex;
+            simplifiedVertex.p = vec3f(vertex->position.x, vertex->position.y, vertex->position.z);
+            simplifiedVertex.tstart = 0;
+            simplifiedVertex.tcount = 0;
+            simplifiedVertex.border = 0;
 
-    for (int i = startIdx; i <= endIdx; ++i) {
-        SimpleFace* face = m_faces[i];
+            vertexIndexMap[vertex] = simplifierVertexIndex;
+            simplifier.vertices.push_back(simplifiedVertex);
+            ++simplifierVertexIndex;
+        }
+    };
 
-        auto processVertex = [&](SimpleVertex* vertex) {
-            int originalIndex = std::distance(&m_vertices[0], vertex);
-            if (vertexIndexMap.find(originalIndex) == vertexIndexMap.end()) {
-                MeshSimplifier::Vertex simplifiedVertex;
-                simplifiedVertex.p = vec3f(vertex->position.x, vertex->position.y, vertex->position.z);
-                simplifiedVertex.tstart = 0;
-                simplifiedVertex.tcount = 0;
-                simplifiedVertex.border = 0;
-
-                vertexIndexMap[originalIndex] = simplifierVertexIndex;
-                simplifier.vertices.push_back(simplifiedVertex);
-                ++simplifierVertexIndex;
-            }
-        };
-
-        processVertex(face->v1);
-        processVertex(face->v2);
-        processVertex(face->v3);
+    for (auto& range : indexRanges)
+    {
+        int startIdx = range.first;
+        int endIdx = range.second;
+        for (int i = startIdx; i <= endIdx; ++i) {
+            SimpleFace* face = m_faces[i];
+            createVertex(face->v1);
+            createVertex(face->v2);
+            createVertex(face->v3);
+        }
     }
 
-    for (int i = startIdx; i <= endIdx && i < m_faces.size(); ++i) {
-        const auto& face = m_faces[i];
-        MeshSimplifier::Triangle simplifiedTriangle;
+    for(auto& range : indexRanges) 
+    {
+        int startIdx = range.first;
+        int endIdx = range.second;
+        for (int i = startIdx; i <= endIdx && i < m_faces.size(); ++i) {
+            const auto& face = m_faces[i];
+            MeshSimplifier::Triangle simplifiedTriangle;
 
-        simplifiedTriangle.v[0] = vertexIndexMap[face->v1 - &m_vertices[0]];
-        simplifiedTriangle.v[1] = vertexIndexMap[face->v2 - &m_vertices[0]];
-        simplifiedTriangle.v[2] = vertexIndexMap[face->v3 - &m_vertices[0]];
+            simplifiedTriangle.v[0] = vertexIndexMap[face->v1];
+            simplifiedTriangle.v[1] = vertexIndexMap[face->v2];
+            simplifiedTriangle.v[2] = vertexIndexMap[face->v3];
 
-        glm::vec3 faceNormal = glm::normalize(glm::cross(
-            face->v2->position - face->v1->position,
-            face->v3->position - face->v1->position
-        ));
-        simplifiedTriangle.n = vec3f(faceNormal.x, faceNormal.y, faceNormal.z);
+            glm::vec3 faceNormal = glm::normalize(glm::cross(
+                face->v2->position - face->v1->position,
+                face->v3->position - face->v1->position
+            ));
+            simplifiedTriangle.n = vec3f(faceNormal.x, faceNormal.y, faceNormal.z);
 
-        simplifiedTriangle.uvs[0] = vec3f(face->v1->uv.x, face->v1->uv.y, 0.0);
-        simplifiedTriangle.uvs[1] = vec3f(face->v2->uv.x, face->v2->uv.y, 0.0);
-        simplifiedTriangle.uvs[2] = vec3f(face->v3->uv.x, face->v3->uv.y, 0.0);
+            simplifiedTriangle.deleted = 0;
+            simplifiedTriangle.dirty = 0;
+            simplifiedTriangle.attr = MeshSimplifier::Attributes::TEXCOORD | MeshSimplifier::Attributes::NORMAL;
+            simplifiedTriangle.material = -1;
 
-        simplifiedTriangle.deleted = 0;
-        simplifiedTriangle.dirty = 0;
-        simplifiedTriangle.attr = MeshSimplifier::Attributes::TEXCOORD | MeshSimplifier::Attributes::NORMAL;
-        simplifiedTriangle.material = -1;
-
-        simplifier.triangles.push_back(simplifiedTriangle);
+            simplifier.triangles.push_back(simplifiedTriangle);
+        }
     }
 }
 
-float SimpleMesh::QEM(int start, int end, const std::string& objFilePath, float ratio = 0.5) {
-    MeshSimplifier simplifier;
-    exportMeshSimplifier(simplifier, start, end);
+void SimpleMesh::QEM(SimpleMesh& targetMesh, const std::string& lodFolderPath, float ratio = 0.5) {
+    targetMesh.m_clusterGroupErrors.resize(m_clusterGroupOffsets.size() - 1, 0.0);
+	targetMesh.m_clusterGroupOffsets.clear();
 
-    int target_count = simplifier.triangles.size() >> 1;
+    #pragma omp parallel for
+    for(int i = 0; i < m_clusterGroupOffsets.size()-1; i++){
+        int startIdx = m_clusterGroupOffsets[i];
+        int endIdx = m_clusterGroupOffsets[i+1] - 1;
+        MeshSimplifier simplifier;
 
-    if (ratio > 1.0) ratio = 1.0;
-    if (ratio <= 0.0) {
-        std::cout << "Ratio must be BETWEEN zero and one." << std::endl;
-        return EXIT_FAILURE;
+        std::vector<std::pair<int, int>> indexRanges;
+        for(int j = startIdx; j <= endIdx; j++){
+            Cluster* cluster = m_clusters[j];
+            indexRanges.push_back(std::make_pair(cluster->startIdx, cluster->endIdx));
+        }
+
+        exportMeshSimplifier(simplifier, indexRanges);
+    
+        int target_count = simplifier.triangles.size() >> 1;
+
+        ratio = std::clamp(ratio, 0.0f, 1.0f);
+        target_count = round((float)simplifier.triangles.size() * ratio);
+
+        if (target_count >= 4){
+            int startSize = simplifier.triangles.size();
+            simplifier.simplify_mesh(target_count, 7.0, true);
+
+            if (simplifier.triangles.size() >= startSize) {
+                #pragma omp critical
+                std::cout << "[Warning]: Unable to reduce mesh." << std::endl;
+            }
+            //#pragma omp critical
+            //std::cout << "Output: " << simplifier.vertices.size() << " vertices, " << simplifier.triangles.size() 
+            //    << " triangles (" << (float)simplifier.triangles.size() / (float)startSize 
+            //    << " reduction;) Total error: " << simplifier.total_error << std::endl;
+        }
+        //std::string objFilePath = lodFolderPath + "/clusterGroupQEM_" + std::to_string(i) + ".obj";
+        //simplifier.write_obj((objFilePath).c_str());
+        targetMesh.m_clusterGroupErrors[i] = simplifier.total_error;
+         #pragma omp critical
+         {
+            targetMesh.importMeshSimplifier(simplifier);
+         }
     }
-    target_count = round((float)simplifier.triangles.size() * ratio);
-
-    if (target_count < 4) {
-        std::cout << "Object will not survive such extreme decimation" << std::endl;
-        return EXIT_FAILURE;
-    }
-
-    int startSize = simplifier.triangles.size();
-    simplifier.simplify_mesh(target_count, 7.0, true);
-
-    if (simplifier.triangles.size() >= startSize) {
-        std::cout << "Unable to reduce mesh." << std::endl;
-        return EXIT_FAILURE;
-    }
-
-    simplifier.write_obj((objFilePath).c_str());
-
-    #pragma omp critical
-    std::cout << "Output: " << simplifier.vertices.size() << " vertices, " << simplifier.triangles.size() 
-              << " triangles (" << (float)simplifier.triangles.size() / (float)startSize 
-              << " reduction; " << ((float)(clock() - start)) / CLOCKS_PER_SEC << " sec)"
-              << "Total error: " << simplifier.total_error << std::endl;
-    return simplifier.total_error;
+    m_clusterGroupOffsets.push_back(m_clusters.size());
 }
 
 void SimpleMesh::importMeshSimplifier(const MeshSimplifier& simplifier) {
-    m_vertices.clear();
-    m_faces.clear();
+    std::vector<SimpleVertex*> simplifierVertexMap(simplifier.vertices.size(), nullptr);
+    std::vector<glm::vec3> vertexNormals(simplifier.vertices.size(), glm::vec3(0.0f));
+    std::vector<glm::vec2> vertexUVs(simplifier.vertices.size(), glm::vec2(0.0f));
 
-    for (const auto& simplifiedVertex : simplifier.vertices) {
-        glm::vec3 position(simplifiedVertex.p.x, simplifiedVertex.p.y, simplifiedVertex.p.z);
-        glm::vec3 normal(0.0f, 0.0f, 0.0f);
-        glm::vec2 uv(0.0f, 0.0f);
-
-        m_vertices.emplace_back(position, normal, uv);
+    for (int i = 0; i < simplifier.vertices.size(); i++) {
+        const auto& vertex = simplifier.vertices[i];
+        glm::vec3 position = glm::vec3(vertex.p.x, vertex.p.y, vertex.p.z);
+        SimpleVertex* v = createVertex(position, glm::vec3(0.0f), glm::vec2(0.0f));
+		simplifierVertexMap[i] = v;
     }
 
-    for (const auto& simplifiedTriangle : simplifier.triangles) {
-        if (simplifiedTriangle.deleted) continue;
+    int faceOffset = m_faces.size();
+    for (int i = 0; i < simplifier.triangles.size(); i++) {
+        const auto& triangle = simplifier.triangles[i];
 
-        SimpleFace face(
-            &m_vertices[simplifiedTriangle.v[0]],
-            &m_vertices[simplifiedTriangle.v[1]],
-            &m_vertices[simplifiedTriangle.v[2]]
-        );
+        SimpleVertex* v1 = simplifierVertexMap[triangle.v[0]];
+        SimpleVertex* v2 = simplifierVertexMap[triangle.v[1]];
+        SimpleVertex* v3 = simplifierVertexMap[triangle.v[2]];
 
-        face.v1->uv = glm::vec2(simplifiedTriangle.uvs[0].x, simplifiedTriangle.uvs[0].y);
-        face.v2->uv = glm::vec2(simplifiedTriangle.uvs[1].x, simplifiedTriangle.uvs[1].y);
-        face.v3->uv = glm::vec2(simplifiedTriangle.uvs[2].x, simplifiedTriangle.uvs[2].y);
+        glm::vec3 faceNormal = glm::vec3(triangle.n.x, triangle.n.y, triangle.n.z);
 
-        glm::vec3 faceNormal(simplifiedTriangle.n.x, simplifiedTriangle.n.y, simplifiedTriangle.n.z);
-        face.v1->normal += faceNormal;
-        face.v2->normal += faceNormal;
-        face.v3->normal += faceNormal;
+        vertexNormals[triangle.v[0]] += faceNormal;
+        vertexNormals[triangle.v[1]] += faceNormal;
+        vertexNormals[triangle.v[2]] += faceNormal;
+
+        vertexUVs[triangle.v[0]] = glm::vec2(triangle.uvs[0].x, triangle.uvs[0].y);
+        vertexUVs[triangle.v[1]] = glm::vec2(triangle.uvs[1].x, triangle.uvs[1].y);
+        vertexUVs[triangle.v[2]] = glm::vec2(triangle.uvs[2].x, triangle.uvs[2].y);
+
+        SimpleFace* face = new SimpleFace(v1, v2, v3, i + faceOffset);
 
         m_faces.push_back(face);
+
+        createEdge(v1, v2, face);
+        createEdge(v2, v3, face);
+        createEdge(v3, v1, face);
     }
 
-    for (auto& vertex : m_vertices) {
-        if (glm::length(vertex.normal) > 0.0f) {
-            vertex.normal = glm::normalize(vertex.normal);
+    for (int i = 0; i < simplifier.vertices.size(); i++) {
+        glm::vec3& normal = vertexNormals[i];
+        float len = glm::length(normal);
+        if (len > 0.0f) {
+            normal /= len;
         } else {
-            vertex.normal = glm::vec3(0.0f, 1.0f, 0.0f);
+            normal = glm::vec3(0.0f, 1.0f, 0.0f);
         }
+        simplifierVertexMap[i]->normal = normal;
+        simplifierVertexMap[i]->uv = vertexUVs[i];
     }
+
+    m_clusterGroupOffsets.push_back(m_faces.size());
 }

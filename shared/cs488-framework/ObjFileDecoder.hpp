@@ -1,7 +1,4 @@
 #pragma once
-
-#include "cs488-framework/Vertex.hpp"
-
 #include <glm/glm.hpp>
 #include <vector>
 #include <string>
