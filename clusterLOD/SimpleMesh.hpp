@@ -25,7 +25,6 @@ public:
 
 class SimpleFace{
 public: 
-    unsigned int clusterId = 0;
     unsigned int sequenceId = 0;
 
     SimpleVertex* v1;
@@ -53,10 +52,8 @@ public:
     void createEdge(SimpleVertex* v1, SimpleVertex* v2, SimpleFace* face);
 
     void importMesh(const std::string& objFilePath);
-    void exportMesh(int startIdx, int endIdx, const std::string& objFilePath);
     void exportMesh(const std::vector<std::pair<int, int>>& indexRanges, const std::string& objFilePath);
-    void exportMesh(const std::string& objFilePath, int clusterId);
-    void exportCluster(const std::string& lodFolderPath);
+    void exportMesh(const std::string& objFilePath);
     void exportClusterGroup(const std::string& lodFolderPath);
 
     void splitterRecur(unsigned int start, unsigned int end, int depth);

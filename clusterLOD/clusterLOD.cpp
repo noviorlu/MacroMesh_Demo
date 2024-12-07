@@ -84,7 +84,7 @@ void clusterLOD::init()
 	LodMeshes sMeshes;
 	SimpleMesh* sMesh = new SimpleMesh();
 	sMeshes.push_back(sMesh);
-	SimpleMesh::partition_loop(sMeshes, ModelFilePath + "suzanne.obj", ModelFilePath + "LOD1");
+	SimpleMesh::partition_loop(sMeshes, ModelFilePath + "suzanne.obj", ModelFilePath + "LOD");
 
 	exit(0);
 

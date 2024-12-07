@@ -48,3 +48,5 @@ docs/*
 
 /clusterLOD/vsproject/.vs/CS488-Projects
 /clusterLOD/log.txt
+
+*.obj
