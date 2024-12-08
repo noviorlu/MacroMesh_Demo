@@ -20,15 +20,15 @@
 #define MAX_CLUSTER_IN_CLUSTERGROUP 32
 #define MAX_TRI_IN_CLUSTERGROUP (MAX_TRI_IN_CLUSTER * MAX_CLUSTER_IN_CLUSTERGROUP)
 
-SimpleVertex* SimpleMesh::createVertex(glm::vec3 position, glm::vec3 normal, glm::vec2 uv) {
+unsigned int SimpleMesh::createVertex(glm::vec3 position, glm::vec3 normal, glm::vec2 uv) {
     if (m_vertexMap.find(position) == m_vertexMap.end()) {
         m_vertices.emplace_back(position, normal, uv);
-        m_vertexMap[position] = &m_vertices.back();
+        m_vertexMap[position] = m_vertices.size() - 1;
     }
     return m_vertexMap[position];
 }
 
-void SimpleMesh::createEdge(SimpleVertex* v1, SimpleVertex* v2, SimpleFace* face) {
+void SimpleMesh::createEdge(unsigned int v1, unsigned int v2, SimpleFace* face) {
     if (v1 > v2) std::swap(v1, v2);
     auto edge = std::make_pair(v1, v2);
     if (m_edgeMap.find(edge) == m_edgeMap.end()) {
@@ -43,13 +43,13 @@ void SimpleMesh::importMesh(const std::string& objFilePath) {
     std::vector<glm::vec2> uvCoords;
     ObjFileDecoder::decode(objFilePath.c_str(), m_name, positions, normals, uvCoords);
     
-    std::function<SimpleVertex*(int)> createVertex;
+    std::function<unsigned int(int)> createVertex;
     if (!uvCoords.empty()) {
-        createVertex = [&](int i) -> SimpleVertex* {
+        createVertex = [&](int i) -> unsigned int {
             return SimpleMesh::createVertex(positions[i], normals[i], uvCoords[i]);
         };
     } else {
-        createVertex = [&](int i) -> SimpleVertex* {
+        createVertex = [&](int i) -> unsigned int {
             return SimpleMesh::createVertex(positions[i], normals[i], glm::vec2(0.0f));
         };
     }
@@ -60,7 +60,7 @@ void SimpleMesh::importMesh(const std::string& objFilePath) {
     m_vertices.reserve(positions.size());
 
     for(int i = 0; i < positions.size(); i+=3){
-        SimpleVertex *v1, *v2, *v3;
+        unsigned int v1, v2, v3;
         v1 = createVertex(i);
         v2 = createVertex(i+1);
         v3 = createVertex(i+2);
@@ -87,6 +87,9 @@ void SimpleMesh::importMesh(const std::string& objFilePath) {
     m_vertexMap.clear();
     m_edgeMap.clear();
 
+    m_vertices.shrink_to_fit();
+    m_faces.shrink_to_fit();
+
     m_clusterGroupOffsets.push_back(0);
     m_clusterGroupOffsets.push_back(m_faces.size());
 
@@ -105,11 +108,11 @@ void SimpleMesh::exportMesh(const std::vector<std::pair<int, int>>& indexRanges,
     
 
     int vertexCount = 1;
-    std::unordered_map<SimpleVertex*, int> vertexMapping;
-    std::vector<SimpleVertex*> vertices;
-    vertexMapping.reserve(triSize);
-    vertices.reserve(triSize);
-    auto createVertexMapping = [&](SimpleVertex* v) {
+    std::unordered_map<unsigned int, int> vertexMapping;
+    std::vector<unsigned int> vertices;
+    vertexMapping.reserve(triSize * 3);
+    vertices.reserve(triSize * 3);
+    auto createVertexMapping = [&](unsigned int v) {
         if (vertexMapping.find(v) == vertexMapping.end()) {
             vertices.push_back(v);
             vertexMapping[v] = vertexCount;
@@ -129,7 +132,8 @@ void SimpleMesh::exportMesh(const std::vector<std::pair<int, int>>& indexRanges,
         }
     }
 
-    for (SimpleVertex* vertex : vertices) {
+    for (unsigned int vertexId : vertices) {
+        SimpleVertex* vertex = &m_vertices[vertexId];
         outFile << "v " << vertex->position.x << " " << vertex->position.y << " " << vertex->position.z << std::endl;
         outFile << "vn " << vertex->normal.x << " " << vertex->normal.y << " " << vertex->normal.z << std::endl;
         outFile << "vt " << vertex->uv.x << " " << vertex->uv.y << std::endl;
@@ -163,13 +167,12 @@ void SimpleMesh::exportMesh(const std::string& objFilePath) {
     }
 
     for (SimpleFace* face : m_faces) {
-        int v1 = face->v1 - &m_vertices[0] + 1;
-        int v2 = face->v2 - &m_vertices[0] + 1;
-        int v3 = face->v3 - &m_vertices[0] + 1;
+        int v1 = face->v1 + 1;
+        int v2 = face->v2 + 1;
+        int v3 = face->v3 + 1;
         outFile << "f " << v1 << "/" << v1 << "/" << v1 << " " << v2 << "/" << v2 << "/" << v2 << " " << v3 << "/" << v3 << "/" << v3 << std::endl;
     }
 }
-
 
 void SimpleMesh::exportClusterGroup(const std::string& lodFolderPath) {
     if (!std::filesystem::exists(lodFolderPath)) {
@@ -273,9 +276,30 @@ void SimpleMesh::splitterRecur(unsigned int startIdx, unsigned int endIdx, int d
     }
 }
 
+int findLowerBoundIndex(const std::vector<unsigned int>& mylist, int idx) {
+    int left = 0;
+    int right = mylist.size();
+    int mid;
+
+    while (left < right) {
+        mid = left + (right - left) / 2;
+        if (mylist[mid] < idx) {
+            left = mid + 1;
+        }
+        else {
+            right = mid;
+        }
+    }
+
+    if (left > 0 && mylist[left - 1] <= idx) {
+        return left - 1;
+    }
+
+    return left;
+}
+
 void SimpleMesh::splitter(){
     m_clusterOffsets.clear();
-
     #pragma omp parallel for
     for (int i = 0; i < m_clusterGroupOffsets.size() - 1; i++) {
 		int startIdx = m_clusterGroupOffsets[i];
@@ -283,17 +307,20 @@ void SimpleMesh::splitter(){
 
         splitterRecur(startIdx, endIdx, 0);
     }
-    
     std::sort(m_clusterOffsets.begin(), m_clusterOffsets.end());
     m_clusterOffsets.push_back(m_faces.size());
+
+    m_clusters.resize(m_clusterOffsets.size() - 1);
 
     #pragma omp parallel for
     for(int i = 0; i < m_clusterOffsets.size() - 1; i++){
         unsigned int startIdx = m_clusterOffsets[i];
         unsigned int endIdx = m_clusterOffsets[i+1] - 1;
 
-        Cluster* cluster = new Cluster(startIdx, endIdx, i);
-        m_clusters.push_back(cluster);
+        // find clusterGroup error and assign to cluster
+        int idx = findLowerBoundIndex(m_clusterGroupOffsets, startIdx);
+        Cluster* cluster = new Cluster(startIdx, endIdx, i, m_clusterGroupErrors[idx]);
+        m_clusters[i] = cluster;
 
         for(int j = startIdx; j <= endIdx; j++){
             m_faces[j]->sequenceId = i;
@@ -400,30 +427,49 @@ void SimpleMesh::grouper(){
     grouperRecur(0, m_clusters.size() - 1, 0);
     std::sort(m_clusterGroupOffsets.begin(), m_clusterGroupOffsets.end());
     m_clusterGroupOffsets.push_back(m_clusters.size());
+
+    
+    m_clusterGroups.resize(m_clusterGroupOffsets.size() - 1);
+
+    #pragma omp parallel for
+    for(int i = 0; i < m_clusterGroupOffsets.size() - 1; i++){
+        unsigned int startIdx = m_clusterGroupOffsets[i];
+        unsigned int endIdx = m_clusterGroupOffsets[i+1] - 1;
+        
+        ClusterGroup* clusterGroup = new ClusterGroup();
+        m_clusterGroups[i] = clusterGroup;
+
+        float maxError = 0.0f;
+        for(int j = startIdx; j <= endIdx; j++){
+            clusterGroup->m_clusterlist.push_back(m_clusters[j]);
+            
+            maxError = m_clusters[j]->error > maxError ? m_clusters[j]->error : maxError;
+        }
+        clusterGroup->error = maxError;
+    }
 }
 
 void SimpleMesh::partition_loop(LodMeshes& lodMesh, const std::string& objFilePath, const std::string& lodFolderPath) {
-    SimpleMesh& srcMesh = *lodMesh[0];
+    lodMesh.resize(9);
+	lodMesh[0] = new SimpleMesh();
 
     auto starttime = std::chrono::high_resolution_clock::now();
-    srcMesh.importMesh(objFilePath);
+    lodMesh[0]->importMesh(objFilePath);
     auto endtime = std::chrono::high_resolution_clock::now();
     std::cout << "Import Mesh Time: "
         << std::fixed << std::setprecision(5)
         << std::chrono::duration<double>(endtime - starttime).count()
         << "s" << std::endl;
 
-    for (int i = 0; i <= 3; i++) {
+    for (int i = 0;; i++) {
+        SimpleMesh* srcMesh = lodMesh[i];
         auto folderPath = lodFolderPath + "_" + std::to_string(i);
         if (!std::filesystem::exists(folderPath)) {
             std::filesystem::create_directories(folderPath);
         }
         
-        srcMesh = *(lodMesh[i]);
-        srcMesh.m_clusterOffsets.clear();
-
         starttime = std::chrono::high_resolution_clock::now();
-        srcMesh.splitter();
+        srcMesh->splitter();
         endtime = std::chrono::high_resolution_clock::now();
         std::cout << "Splitter Time: "
             << std::fixed << std::setprecision(5)
@@ -431,34 +477,23 @@ void SimpleMesh::partition_loop(LodMeshes& lodMesh, const std::string& objFilePa
             << "s" << std::endl;
 
         starttime = std::chrono::high_resolution_clock::now();
-        srcMesh.grouper();
+        srcMesh->grouper();
         endtime = std::chrono::high_resolution_clock::now();
         std::cout << "Grouper Time: "
             << std::fixed << std::setprecision(5)
             << std::chrono::duration<double>(endtime - starttime).count()
             << "s" << std::endl;
 
-         starttime = std::chrono::high_resolution_clock::now();
-         srcMesh.exportClusterGroup(lodFolderPath +"_" + std::to_string(i));
-         endtime = std::chrono::high_resolution_clock::now();
-         std::cout << "Export Cluster Group Time: "
-             << std::fixed << std::setprecision(5)
-             << std::chrono::duration<double>(endtime - starttime).count()
-             << "s" << std::endl;
-
-        lodMesh.push_back(new SimpleMesh());
-        SimpleMesh& targetMesh = *lodMesh[i+1];
+        if (i >= 8 || srcMesh->m_faces.size() < MAX_TRI_IN_CLUSTER) break;
+        lodMesh[i + 1] = new SimpleMesh();
+        SimpleMesh* targetMesh = lodMesh[i + 1];
         starttime = std::chrono::high_resolution_clock::now();
-        srcMesh.QEM(targetMesh, folderPath, 0.5);
+        srcMesh->QEM(targetMesh, folderPath, 0.5);
         endtime = std::chrono::high_resolution_clock::now();
         std::cout << "QEM Cluster Group + Export Time: "
             << std::fixed << std::setprecision(5)
             << std::chrono::duration<double>(endtime - starttime).count()
             << "s" << std::endl;
-
-        //std::vector<std::pair<int, int>> indexRanges;
-		//indexRanges.push_back(std::make_pair(0, targetMesh.m_faces.size() - 1));
-        //targetMesh.exportMesh(indexRanges, lodFolderPath + "_" + std::to_string(i) + "/clusterGroup_SIMP_" + std::to_string(i) + ".obj");
     }
 }
 
@@ -468,17 +503,19 @@ void SimpleMesh::exportMeshSimplifier(MeshSimplifier& simplifier, const std::vec
     simplifier.triangles.clear();
     simplifier.refs.clear();
 
-    std::unordered_map<SimpleVertex*, int> vertexIndexMap;
+    std::unordered_map<int, int> vertexIndexMap;
     int simplifierVertexIndex = 0;
-    auto createVertex = [&](SimpleVertex* vertex) {
-        if (vertexIndexMap.find(vertex) == vertexIndexMap.end()) {
+    auto createVertex = [&](int vertIdx) {
+        if (vertexIndexMap.find(vertIdx) == vertexIndexMap.end()) {
+			SimpleVertex& vertex = m_vertices[vertIdx];
+            
             MeshSimplifier::Vertex simplifiedVertex;
-            simplifiedVertex.p = vec3f(vertex->position.x, vertex->position.y, vertex->position.z);
+            simplifiedVertex.p = vec3f(vertex.position.x, vertex.position.y, vertex.position.z);
             simplifiedVertex.tstart = 0;
             simplifiedVertex.tcount = 0;
             simplifiedVertex.border = 0;
 
-            vertexIndexMap[vertex] = simplifierVertexIndex;
+            vertexIndexMap[vertIdx] = simplifierVertexIndex;
             simplifier.vertices.push_back(simplifiedVertex);
             ++simplifierVertexIndex;
         }
@@ -508,9 +545,12 @@ void SimpleMesh::exportMeshSimplifier(MeshSimplifier& simplifier, const std::vec
             simplifiedTriangle.v[1] = vertexIndexMap[face->v2];
             simplifiedTriangle.v[2] = vertexIndexMap[face->v3];
 
+            SimpleVertex& v1 = m_vertices[face->v1];
+            SimpleVertex& v2 = m_vertices[face->v2];
+            SimpleVertex& v3 = m_vertices[face->v3];
             glm::vec3 faceNormal = glm::normalize(glm::cross(
-                face->v2->position - face->v1->position,
-                face->v3->position - face->v1->position
+                v2.position - v1.position,
+                v3.position - v1.position
             ));
             simplifiedTriangle.n = vec3f(faceNormal.x, faceNormal.y, faceNormal.z);
 
@@ -524,22 +564,34 @@ void SimpleMesh::exportMeshSimplifier(MeshSimplifier& simplifier, const std::vec
     }
 }
 
-void SimpleMesh::QEM(SimpleMesh& targetMesh, const std::string& lodFolderPath, float ratio = 0.5) {
-    targetMesh.m_clusterGroupErrors.resize(m_clusterGroupOffsets.size() - 1, 0.0);
-	targetMesh.m_clusterGroupOffsets.clear();
+void SimpleMesh::QEM(SimpleMesh* targetMesh, const std::string& lodFolderPath, float ratio = 0.5) {
+    targetMesh->m_clusterGroupErrors.resize(m_clusterGroupOffsets.size() - 1, 0.0);
+	targetMesh->m_clusterGroupOffsets.clear();
+              
+    targetMesh->m_vertices.reserve(m_vertices.size());
+    targetMesh->m_vertexMap.reserve(m_vertices.size());
+    targetMesh->m_faces.reserve(m_faces.size() * ratio);
+    targetMesh->m_edgeMap.reserve(m_vertices.size() * 3);
+
+    std::cout << "Each ClusterGroupSize: ";
+	for (int i = 0; i < m_clusterGroupOffsets.size() - 1; i++) {
+		int startIdx = m_clusterGroupOffsets[i];
+		int endIdx = m_clusterGroupOffsets[i + 1] - 1;
+		
+        int triCount = 0;
+		for (int j = startIdx; j <= endIdx; j++) {
+			triCount += m_clusters[j]->endIdx - m_clusters[j]->startIdx + 1;
+		}
+		std::cout << triCount << " ";
+	}
+	std::cout << std::endl;
 
     #pragma omp parallel for
-    for(int i = 0; i < m_clusterGroupOffsets.size()-1; i++){
-        int startIdx = m_clusterGroupOffsets[i];
-        int endIdx = m_clusterGroupOffsets[i+1] - 1;
+	for (int i = 0; i < m_clusterGroups.size(); i++) {
+		ClusterGroup* clusterGroup = m_clusterGroups[i];
         MeshSimplifier simplifier;
-
-        std::vector<std::pair<int, int>> indexRanges;
-        for(int j = startIdx; j <= endIdx; j++){
-            Cluster* cluster = m_clusters[j];
-            indexRanges.push_back(std::make_pair(cluster->startIdx, cluster->endIdx));
-        }
-
+        
+        std::vector<std::pair<int, int>> indexRanges = clusterGroup->getClusterRanges();
         exportMeshSimplifier(simplifier, indexRanges);
     
         int target_count = simplifier.triangles.size() >> 1;
@@ -550,11 +602,6 @@ void SimpleMesh::QEM(SimpleMesh& targetMesh, const std::string& lodFolderPath, f
         if (target_count >= 4){
             int startSize = simplifier.triangles.size();
             simplifier.simplify_mesh(target_count, 7.0, true);
-
-            if (simplifier.triangles.size() >= startSize) {
-                #pragma omp critical
-                std::cout << "[Warning]: Unable to reduce mesh." << std::endl;
-            }
             //#pragma omp critical
             //std::cout << "Output: " << simplifier.vertices.size() << " vertices, " << simplifier.triangles.size() 
             //    << " triangles (" << (float)simplifier.triangles.size() / (float)startSize 
@@ -564,17 +611,35 @@ void SimpleMesh::QEM(SimpleMesh& targetMesh, const std::string& lodFolderPath, f
         std::string objFilePath = lodFolderPath + "/clusterGroup_QEM_" + std::to_string(i) + ".obj";
         simplifier.write_obj((objFilePath).c_str());
 
-        targetMesh.m_clusterGroupErrors[i] = simplifier.total_error;
+        targetMesh->m_clusterGroupErrors[i] = simplifier.total_error + clusterGroup->error;
         #pragma omp critical
         {
-            targetMesh.m_clusterGroupOffsets.push_back(targetMesh.m_faces.size());
-            targetMesh.importMeshSimplifier(simplifier);
+            targetMesh->m_clusterGroupOffsets.push_back(targetMesh->m_faces.size());
+            targetMesh->importMeshSimplifier(simplifier);
         }
     }
-    targetMesh.m_clusterGroupOffsets.push_back(targetMesh.m_faces.size());
 
-	m_vertexMap.clear();
-	m_edgeMap.clear();
+    // construct AdjacentFaces in all SimpleFace
+    for(auto& edge : targetMesh->m_edgeMap){
+        auto& faces = edge.second;
+        for(int i = 0; i < faces.size(); i++){
+            for(int j = i+1; j < faces.size(); j++){
+                faces[i]->adjacentFace.insert(faces[j]);
+                faces[j]->adjacentFace.insert(faces[i]);
+            }
+        }
+    }
+
+	std::sort(targetMesh->m_clusterGroupOffsets.begin(), targetMesh->m_clusterGroupOffsets.end());
+    targetMesh->m_clusterGroupOffsets.push_back(targetMesh->m_faces.size());
+
+    targetMesh->m_vertexMap.clear();
+    targetMesh->m_edgeMap.clear();
+
+    targetMesh->m_vertices.shrink_to_fit();
+    targetMesh->m_faces.shrink_to_fit();
+
+    std::cout << "Reuction from: " << this->m_faces.size() << " to " << targetMesh->m_faces.size() << std::endl;
 }
 
 void SimpleMesh::importMeshSimplifier(const MeshSimplifier& simplifier) {
@@ -624,17 +689,11 @@ void SimpleMesh::importMeshSimplifier(const MeshSimplifier& simplifier) {
         }
     }
 
-    m_vertices.reserve(m_vertices.size() + vertSize);
-    m_vertexMap.reserve(m_vertexMap.size() + vertSize);
-    m_faces.reserve(m_faces.size() + triSize);
-    m_edgeMap.reserve(m_edgeMap.size() + vertSize * 3);
-
-    std::vector<SimpleVertex*> vertexIndexMap;
-
+    std::vector<int> vertexIndexMap;
     for(int i = 0; i < vertSize; i++){
-        if(!usedVertices[i]) vertexIndexMap.push_back(nullptr);
+        if(!usedVertices[i]) vertexIndexMap.push_back(-1);
         else {
-            SimpleVertex* vertex = createVertex(vertices[i], vertex_normals[i], glm::vec2(0));
+            unsigned int vertex = createVertex(vertices[i], vertex_normals[i], glm::vec2(0));
 			vertexIndexMap.push_back(vertex);
         }
     }
@@ -644,21 +703,46 @@ void SimpleMesh::importMeshSimplifier(const MeshSimplifier& simplifier) {
     uvs.clear();
     usedVertices.clear();
 
+	int prevTriSize = m_faces.size();
+
     for(int i = 0; i < triSize; i++){
         if(simplifier.triangles[i].deleted) continue;
         int v1 = simplifier.triangles[i].v[0];
         int v2 = simplifier.triangles[i].v[1];
         int v3 = simplifier.triangles[i].v[2];
 
-        SimpleVertex* vertex1 = vertexIndexMap[v1];
-        SimpleVertex* vertex2 = vertexIndexMap[v2];
-        SimpleVertex* vertex3 = vertexIndexMap[v3];
+        int vertex1 = vertexIndexMap[v1];
+        int vertex2 = vertexIndexMap[v2];
+        int vertex3 = vertexIndexMap[v3];
 
-        SimpleFace* face = new SimpleFace(vertex1, vertex2, vertex3, i);
+        assert(vertex1 != -1 && vertex2 != -1 && vertex3 != -1);
+
+        SimpleFace* face = new SimpleFace(vertex1, vertex2, vertex3, i + prevTriSize);
         m_faces.push_back(face);
 
-        createEdge(vertex1, vertex2, face);
-        createEdge(vertex2, vertex3, face);
-        createEdge(vertex3, vertex1, face);
+		createEdge(vertex1, vertex2, face);
+		createEdge(vertex2, vertex3, face);
+		createEdge(vertex3, vertex1, face);
+    }
+}
+
+void printLODInformation(const LodMeshes& lodMesh) {
+    for (int i = 0; i < lodMesh.size(); i++) {
+        SimpleMesh* mesh = lodMesh[i];
+        if(mesh == nullptr) break;
+        std::cout << "LOD " << i << ":\n";
+        std::cout << "Vertices: " << mesh->m_vertices.size() << std::endl;
+        std::cout << "Faces: " << mesh->m_faces.size() << std::endl;
+        std::cout << "Clusters: " << mesh->m_clusters.size() << std::endl;
+        std::cout << "ClusterGroups: " << mesh->m_clusterGroups.size() << std::endl;
+        std::cout << "ClusterGroupSize & Error: ";
+        for(int j = 0; j < mesh->m_clusterGroups.size(); j++){
+            int triCount = 0;
+            for(auto clusters : mesh->m_clusterGroups[j]->m_clusterlist){
+                triCount = clusters->endIdx - clusters->startIdx + 1;
+            }
+            std::cout << "[" << j << "]: (" << triCount << " : "<< mesh->m_clusterGroups[j]->error << ") ";
+        }
+        std::cout << std::endl;
     }
 }

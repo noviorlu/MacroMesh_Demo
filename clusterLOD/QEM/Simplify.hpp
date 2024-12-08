@@ -408,10 +408,7 @@ public:
 					int i1=t.v[(j+1)%3]; Vertex &v1 = vertices[i1];
 					// Border check
 					// [cs488-project]: We don't have border vertices
-					// if(v0.border != v1.border)  continue;
-					
-					// if (vertices[i0].border || vertices[i1].border) continue;
-					if (vertices[i0].border && vertices[i1].border) continue;
+					if (vertices[i0].border || vertices[i1].border) continue;
 					// [cs488-project end]
 
 					// Compute vertex to collapse to
@@ -801,25 +798,6 @@ private:
 	double calculate_error(int id_v1, int id_v2, vec3f &p_result)
 	{
 		// compute interpolated vertex
-
-		// [cs488-project]: add boundary un-collapsable check
-		if (vertices[id_v1].border && !vertices[id_v2].border)
-		{
-			p_result = vertices[id_v1].p;
-			return vertex_error(vertices[id_v1].q, p_result.x, p_result.y, p_result.z);
-		}
-		if (vertices[id_v2].border && !vertices[id_v1].border)
-		{
-			p_result = vertices[id_v2].p;
-			return vertex_error(vertices[id_v2].q, p_result.x, p_result.y, p_result.z);
-		}
-		if (vertices[id_v1].border || vertices[id_v2].border)
-		{
-			p_result = vertices[id_v1].p;
-			return std::numeric_limits<double>::max();
-		}
-		// [cs488-project end]
-
 		SymetricMatrix q = vertices[id_v1].q + vertices[id_v2].q;
 		bool border = vertices[id_v1].border & vertices[id_v2].border;
 		double error=0;

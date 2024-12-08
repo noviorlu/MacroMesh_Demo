@@ -2,7 +2,7 @@
 set CONFIG=Debug
 set PLATFORM=x64
 set OPTIMIZATION=/O2
-set BUILD=Build
+set BUILD=Rebuild
 
 msbuild vsproject\CS488_Framework.sln /p:Configuration=%CONFIG% /p:Platform=%PLATFORM% /p:CL=%OPTIMIZATION% /t:%BUILD%
 msbuild BuildStaticLibs.sln /p:Configuration=%CONFIG% /p:Platform=%PLATFORM% /p:CL=%OPTIMIZATION% /t:%BUILD%

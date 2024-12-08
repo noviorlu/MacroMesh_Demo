@@ -18,9 +18,11 @@
 // To compile for WebAssembly
 //  make wasm
 
-#include "Simplify.h"
+#include "Simplify.hpp"
 #include <stdio.h>
 #include <time.h>  // clock_t, clock, CLOCKS_PER_SEC
+
+MeshSimplifier Simplify;
 
 void showHelp(const char * argv[]) {
 	const char *cstr = (argv[0]);
@@ -60,59 +62,53 @@ int simplify(const char* file_path, const char* export_path, float reduceFractio
 	printf("Mesh Simplification (C)2014 by Sven Forstmann in 2014, MIT License (%zu-bit)\n", sizeof(size_t)*8);
 
 	if (is_obj(file_path)) {
-		Simplify::load_obj(file_path, true);
+		Simplify.load_obj(file_path, true);
 		printf("loading obj\n");
 	}
-	else if (is_mz3(file_path)) {
-		printf("loading mz3\n");
-		Simplify::load_mz3(file_path);
-	} else {
+	else {
 		printf("file is not obj or mz3 %s\n", file_path);
 		return EXIT_FAILURE;
 	}
 
-	if ((Simplify::triangles.size() < 3) || (Simplify::vertices.size() < 3)) {
+	if ((Simplify.triangles.size() < 3) || (Simplify.vertices.size() < 3)) {
 		printf("triangles size or vertices size less than 3\n");
 		return EXIT_FAILURE;
 	}
 
-	int target_count =  Simplify::triangles.size() >> 1;
+	int target_count =  Simplify.triangles.size() >> 1;
 
 	if (reduceFraction > 1.0) reduceFraction = 1.0; //lossless only
 	if (reduceFraction <= 0.0) {
 		printf("Ratio must be BETWEEN zero and one.\n");
 		return EXIT_FAILURE;
 	}
-	target_count = round((float)Simplify::triangles.size() * reduceFraction);
+	target_count = round((float)Simplify.triangles.size() * reduceFraction);
 
 	if (target_count < 4) {
 		printf("Object will not survive such extreme decimation\n");
 		return EXIT_FAILURE;
 	}
 	clock_t start = clock();
-	printf("Input: %zu vertices, %zu triangles (target %d)\n", Simplify::vertices.size(), Simplify::triangles.size(), target_count);
-	int startSize = Simplify::triangles.size();
-	Simplify::simplify_mesh(target_count, agressiveness, true);
-	//Simplify::simplify_mesh_lossless( false);
-	if ( Simplify::triangles.size() >= startSize) {
+	printf("Input: %zu vertices, %zu triangles (target %d)\n", Simplify.vertices.size(), Simplify.triangles.size(), target_count);
+	int startSize = Simplify.triangles.size();
+	Simplify.simplify_mesh(target_count, agressiveness, true);
+	//Simplify.simplify_mesh_lossless( false);
+	if ( Simplify.triangles.size() >= startSize) {
 		printf("Unable to reduce mesh.\n");
 		return EXIT_FAILURE;
 	}
 
 	if (is_obj(export_path)) {
 		printf("exporting obj\n");
-		Simplify::write_obj(export_path);
+		Simplify.write_obj(export_path);
 	}
-	else if (is_mz3(export_path)) {
-		printf("exporting mz3\n");
-		Simplify::write_mz3(export_path);
-	} else {
+	else {
 		printf("export file is not obj or stl %s\n", export_path);
 		return EXIT_FAILURE;
 	}
 
-	printf("Output: %zu vertices, %zu triangles (%f reduction; %.4f sec)\n", Simplify::vertices.size(), Simplify::triangles.size(), (float)Simplify::triangles.size() / (float)startSize, ((float)(clock() - start)) / CLOCKS_PER_SEC);
-	printf("Total error: %f\n", Simplify::total_error);
+	printf("Output: %zu vertices, %zu triangles (%f reduction; %.4f sec)\n", Simplify.vertices.size(), Simplify.triangles.size(), (float)Simplify.triangles.size() / (float)startSize, ((float)(clock() - start)) / CLOCKS_PER_SEC);
+	printf("Total error: %f\n", Simplify.total_error);
 	return EXIT_SUCCESS;
 }
 

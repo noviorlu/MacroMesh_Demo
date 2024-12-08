@@ -82,10 +82,8 @@ void clusterLOD::init()
 	// exit(0);
 
 	LodMeshes sMeshes;
-	SimpleMesh* sMesh = new SimpleMesh();
-	sMeshes.push_back(sMesh);
-	SimpleMesh::partition_loop(sMeshes, ModelFilePath + "suzanne.obj", ModelFilePath + "LOD");
-
+	SimpleMesh::partition_loop(sMeshes, ModelFilePath + "bunny/bunny.obj", ModelFilePath + "bunny/LOD");
+	printLODInformation(sMeshes);
 	exit(0);
 
 	// Acquire the MeshInfoMap from the Mesh.
