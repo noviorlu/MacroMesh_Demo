@@ -22,8 +22,6 @@ typedef std::string  MeshId;
 // File path to a .obj file.
 typedef std::string ObjFilePath;
 
-glm::vec3 HSVtoRGB(float h, float s, float v);
-
 // MeshInfoMap is an associative container that maps a unique MeshId to a BatchInfo
 // object. Each BatchInfo object contains an index offset and the number of indices
 // required to render the mesh with identifier MeshId.

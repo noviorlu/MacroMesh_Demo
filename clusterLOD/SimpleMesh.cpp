@@ -20,6 +20,36 @@
 #define MAX_CLUSTER_IN_CLUSTERGROUP 32
 #define MAX_TRI_IN_CLUSTERGROUP (MAX_TRI_IN_CLUSTER * MAX_CLUSTER_IN_CLUSTERGROUP)
 
+glm::vec3 HSVtoRGB(float h, float s, float v) {
+    h = fmod(h, 1.0f) * 6.0f;
+    int i = static_cast<int>(floor(h));
+    float f = h - i;
+    float p = v * (1.0f - s);
+    float q = v * (1.0f - f * s);
+    float t = v * (1.0f - (1.0f - f) * s);
+
+    switch (i) {
+    case 0: return glm::vec3(v, t, p);
+    case 1: return glm::vec3(q, v, p);
+    case 2: return glm::vec3(p, v, t);
+    case 3: return glm::vec3(p, q, v);
+    case 4: return glm::vec3(t, p, v);
+    case 5: return glm::vec3(v, p, q);
+    default: return glm::vec3(0.0f, 0.0f, 0.0f);
+    }
+}
+
+glm::vec3 genRdColor(){
+    // generate a random hue (h) in [0, 1)
+    float h = static_cast<float>(rand()) / RAND_MAX;
+    float s = 0.8f;
+    float v = 0.8f;
+
+    // convert HSV to RGB
+    return HSVtoRGB(h, s, v);
+}
+
+
 unsigned int SimpleMesh::createVertex(glm::vec3 position, glm::vec3 normal, glm::vec2 uv) {
     if (m_vertexMap.find(position) == m_vertexMap.end()) {
         m_vertices.emplace_back(position, normal, uv);
@@ -94,6 +124,7 @@ void SimpleMesh::importMesh(const std::string& objFilePath) {
     m_clusterGroupOffsets.push_back(m_faces.size());
 
     m_clusterGroupErrors.push_back(0);
+    m_clusterGroups.push_back(new ClusterGroup(0, std::vector<Cluster*>()));
 }
 
 void SimpleMesh::exportMesh(const std::vector<std::pair<int, int>>& indexRanges, const std::string& objFilePath) {
@@ -428,7 +459,7 @@ void SimpleMesh::grouper(){
     std::sort(m_clusterGroupOffsets.begin(), m_clusterGroupOffsets.end());
     m_clusterGroupOffsets.push_back(m_clusters.size());
 
-    
+    m_clusterGroups.clear();
     m_clusterGroups.resize(m_clusterGroupOffsets.size() - 1);
 
     #pragma omp parallel for
@@ -436,20 +467,20 @@ void SimpleMesh::grouper(){
         unsigned int startIdx = m_clusterGroupOffsets[i];
         unsigned int endIdx = m_clusterGroupOffsets[i+1] - 1;
         
-        ClusterGroup* clusterGroup = new ClusterGroup();
-        m_clusterGroups[i] = clusterGroup;
-
         float maxError = 0.0f;
+        std::vector<Cluster*> clusters;
         for(int j = startIdx; j <= endIdx; j++){
-            clusterGroup->m_clusterlist.push_back(m_clusters[j]);
-            
+            clusters.push_back(m_clusters[j]);
             maxError = m_clusters[j]->error > maxError ? m_clusters[j]->error : maxError;
         }
-        clusterGroup->error = maxError;
+        ClusterGroup* clusterGroup = new ClusterGroup(maxError, clusters);
+        m_clusterGroups[i] = clusterGroup;
     }
 }
 
-void SimpleMesh::partition_loop(LodMeshes& lodMesh, const std::string& objFilePath, const std::string& lodFolderPath) {
+void SimpleMesh::partition_loop(LodMesh& lod, const std::string& objFilePath, const std::string& lodFolderPath) {
+    std::vector<SimpleMesh*>& lodMesh = lod.lodMesh;
+    
     lodMesh.resize(9);
 	lodMesh[0] = new SimpleMesh();
 
@@ -565,26 +596,13 @@ void SimpleMesh::exportMeshSimplifier(MeshSimplifier& simplifier, const std::vec
 }
 
 void SimpleMesh::QEM(SimpleMesh* targetMesh, const std::string& lodFolderPath, float ratio = 0.5) {
-    targetMesh->m_clusterGroupErrors.resize(m_clusterGroupOffsets.size() - 1, 0.0);
-	targetMesh->m_clusterGroupOffsets.clear();
-              
+    targetMesh->m_clusterGroups = m_clusterGroups;
+    targetMesh->m_clusterGroupErrors.resize(m_clusterGroups.size());
+
     targetMesh->m_vertices.reserve(m_vertices.size());
     targetMesh->m_vertexMap.reserve(m_vertices.size());
     targetMesh->m_faces.reserve(m_faces.size() * ratio);
     targetMesh->m_edgeMap.reserve(m_vertices.size() * 3);
-
-    std::cout << "Each ClusterGroupSize: ";
-	for (int i = 0; i < m_clusterGroupOffsets.size() - 1; i++) {
-		int startIdx = m_clusterGroupOffsets[i];
-		int endIdx = m_clusterGroupOffsets[i + 1] - 1;
-		
-        int triCount = 0;
-		for (int j = startIdx; j <= endIdx; j++) {
-			triCount += m_clusters[j]->endIdx - m_clusters[j]->startIdx + 1;
-		}
-		std::cout << triCount << " ";
-	}
-	std::cout << std::endl;
 
     #pragma omp parallel for
 	for (int i = 0; i < m_clusterGroups.size(); i++) {
@@ -726,7 +744,7 @@ void SimpleMesh::importMeshSimplifier(const MeshSimplifier& simplifier) {
     }
 }
 
-void printLODInformation(const LodMeshes& lodMesh) {
+void LodMesh::printLODInformation() {
     for (int i = 0; i < lodMesh.size(); i++) {
         SimpleMesh* mesh = lodMesh[i];
         if(mesh == nullptr) break;

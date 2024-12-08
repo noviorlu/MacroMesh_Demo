@@ -1,7 +1,10 @@
 #pragma once
 #include <glm/glm.hpp>
 
-#include "Mesh.hpp"
+#include "common.hpp"
+
+#include "cs488-framework/OpenGLImport.hpp"
+#include "cs488-framework/ShaderProgram.hpp"
 
 #include <unordered_set>
 #include <unordered_map>
@@ -11,8 +14,11 @@
 
 #include <omp.h>
 
-class MeshSimplifier;
 
+glm::vec3 HSVtoRGB(float h, float s, float v);
+glm::vec3 genRdColor();
+
+class MeshSimplifier;
 
 class SimpleVertex{
 public:
@@ -37,11 +43,7 @@ public:
     }
 };
 
-class SimpleMesh;
-typedef std::vector<SimpleMesh*> LodMeshes;
-
-void printLODInformation(const LodMeshes& lodMesh);
-
+class LodMesh;
 class SimpleMesh {
 public: 
     std::string m_name;
@@ -68,9 +70,13 @@ public:
     void exportMeshSimplifier(MeshSimplifier& simplifier, const std::vector<std::pair<int, int>>& indexRanges);
      void importMeshSimplifier(const MeshSimplifier& simplifier);
 
-    static void partition_loop(LodMeshes& lodMesh, const std::string& objFilePath, const std::string& lodFolderPath);
+    static void partition_loop(LodMesh& lodMesh, const std::string& objFilePath, const std::string& lodFolderPath);
 
     std::vector<unsigned int> m_clusterOffsets;
+    std::vector<unsigned int> m_clusterGroupOffsets;
+    std::vector<float> m_clusterGroupErrors;
+
+    class ClusterGroup;
     class Cluster {
     public:
         unsigned int startIdx;
@@ -84,14 +90,16 @@ public:
 
         Cluster(
             unsigned int startIdx, unsigned int endIdx, 
-            unsigned int sequenceId, float error
-        ) : startIdx(startIdx), endIdx(endIdx), sequenceId(sequenceId), error(error) {}
+            unsigned int sequenceId, float error)
+             : startIdx(startIdx), endIdx(endIdx), 
+        sequenceId(sequenceId), error(error) {}
+    
+        GLuint m_vbo;
+        GLuint m_vao;
+        GLuint m_ibo;
+
+
     };
-    std::vector<Cluster*> m_clusters;
-
-    std::vector<unsigned int> m_clusterGroupOffsets;
-    std::vector<float> m_clusterGroupErrors;
-
     class ClusterGroup {
         public:
         float error = 0.0f;
@@ -104,6 +112,19 @@ public:
 			}
 			return indexRanges;
         }
+
+        ClusterGroup(float error, const std::vector<Cluster*>& clusterlist) : error(error) {
+            m_clusterlist = clusterlist;
+        }
     };
+    
+    std::vector<Cluster*> m_clusters;
     std::vector<ClusterGroup*> m_clusterGroups;
+};
+
+
+class LodMesh{
+public:
+    std::vector<SimpleMesh*> lodMesh;
+    void printLODInformation();
 };

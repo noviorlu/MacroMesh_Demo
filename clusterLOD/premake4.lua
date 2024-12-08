@@ -9,8 +9,8 @@ includeDirList = {
 
 -- Library directories
 libDirectories = {
-    "C:/projects/vcpkg/installed/x64-windows-static/lib", -- vcpkg 静态库路径
-    "C:/projects/MacroMesh_Demo/lib" -- 其他库路径
+    "C:/projects/vcpkg/installed/x64-windows-static/lib",
+    "C:/projects/MacroMesh_Demo/lib"
 }
 
 -- Libraries to link
@@ -62,32 +62,3 @@ project "cluster"
         defines { "NDEBUG" }
         optimize "On"
 
--- QEMTest project
-project "QEMTest"
-    kind "ConsoleApp"
-    language "C++"
-    cppdialect "C++17"
-    location "build/QEMTest"
-    objdir "build/QEMTest/obj"
-    targetdir "bin/QEMTest"
-
-    includedirs (includeDirList)
-    libdirs (libDirectories)
-    links (linkLibs)
-
-    files {
-        "./QEMTest/QEMTest.cpp",
-        "./HalfEdgeMesh.cpp",
-        "./MeshProcessing.cpp",
-        "./QEM.cpp",
-        "./Mesh.cpp",
-        "./Cluster.cpp"
-    }
-
-    filter "configurations:Debug"
-        defines { "DEBUG" }
-        symbols "On"
-
-    filter "configurations:Release"
-        defines { "NDEBUG" }
-        optimize "On"

@@ -81,9 +81,9 @@ void clusterLOD::init()
 	// FastQEM(ModelFilePath + "bunny/LOD1");
 	// exit(0);
 
-	LodMeshes sMeshes;
-	SimpleMesh::partition_loop(sMeshes, ModelFilePath + "bunny/bunny.obj", ModelFilePath + "bunny/LOD");
-	printLODInformation(sMeshes);
+	LodMesh lod;
+	SimpleMesh::partition_loop(lod, ModelFilePath + "bunny/bunny.obj", ModelFilePath + "bunny/LOD");
+	lod.printLODInformation();
 	exit(0);
 
 	// Acquire the MeshInfoMap from the Mesh.
