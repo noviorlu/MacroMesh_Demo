@@ -12,22 +12,10 @@
 #include <algorithm>
 #include <string>
 
-#include <omp.h>
+#include "Mesh.hpp"
 
-
-glm::vec3 HSVtoRGB(float h, float s, float v);
-glm::vec3 genRdColor();
 
 class MeshSimplifier;
-
-class SimpleVertex{
-public:
-    glm::vec3 position;
-    glm::vec3 normal;
-    glm::vec2 uv;
-
-    SimpleVertex(glm::vec3 position, glm::vec3 normal, glm::vec2 uv) : position(position), normal(normal), uv(uv) {}
-};
 
 class SimpleFace{
 public: 
@@ -50,7 +38,7 @@ public:
     std::unordered_map<glm::vec3, unsigned int> m_vertexMap;
     std::unordered_map<std::pair<unsigned int, unsigned int>, std::vector<SimpleFace*>> m_edgeMap;
 
-    std::vector<SimpleVertex> m_vertices;
+    std::vector<Vertex> m_vertices;
     std::vector<SimpleFace*> m_faces;
 
     unsigned int createVertex(glm::vec3 position, glm::vec3 normal, glm::vec2 uv); 
@@ -59,6 +47,7 @@ public:
     void importMesh(const std::string& objFilePath);
     void exportMesh(const std::vector<std::pair<int, int>>& indexRanges, const std::string& objFilePath);
     void exportMesh(const std::string& objFilePath);
+    void exportMesh(unsigned int startIdx, unsigned int endIdx, Mesh* mesh);
     void exportClusterGroup(const std::string& lodFolderPath);
 
     void splitterRecur(unsigned int start, unsigned int end, int depth);
@@ -93,14 +82,6 @@ public:
             unsigned int sequenceId, float error)
              : startIdx(startIdx), endIdx(endIdx), 
         sequenceId(sequenceId), error(error) {}
-    
-        void uploadToGPU();
-        void removeFromGPU();
-        void draw(const ShaderProgram& shader) const;
-
-        GLuint m_vbo;
-        GLuint m_vao;
-        GLuint m_ibo;
     };
     class ClusterGroup {
         public:
@@ -129,4 +110,6 @@ class LodMesh{
 public:
     std::vector<SimpleMesh*> lodMesh;
     void printLODInformation();
+
+    void exportLodRuntimeMesh(LodRuntimeMesh& mesh);
 };

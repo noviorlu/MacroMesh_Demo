@@ -80,14 +80,15 @@ void clusterLOD::init()
 	// heMesh.exportMeshToObjFiles(ModelFilePath + "bunny/LOD1");
 	// FastQEM(ModelFilePath + "bunny/LOD1");
 	// exit(0);
-
+	m_meshConsolidator = new LodRuntimeMesh();
+	Mesh::s_meshInfoMap["bunny"] = m_meshConsolidator;
+	
 	LodMesh lod;
 	SimpleMesh::partition_loop(lod, ModelFilePath + "bunny/bunny.obj", ModelFilePath + "bunny/LOD");
 	lod.printLODInformation();
-	exit(0);
+	lod.exportLodRuntimeMesh(*m_meshConsolidator);
 
-	// Acquire the MeshInfoMap from the Mesh.
-	m_meshConsolidator->uploadToGPU();
+	m_meshConsolidator->streaming(m_errorThreshold);
 
 	uploadVertexDataToVbos();
 	mapVboDataToVertexShaderInputLocations();
@@ -401,15 +402,18 @@ void clusterLOD::guiLogic()
 		ImGui::Checkbox("Enable Backface Culling", &m_enableBackFaceCull);
 		ImGui::Checkbox("Enable Frontface Culling", &m_enableFrontFaceCull);
 
-		ImGui::RadioButton("Orientation", (int*)&m_controlMode, ControlMode::ORIENTATION);
-		ImGui::RadioButton("Joints", (int*)&m_controlMode, ControlMode::JOINTS);
+		// ImGui::RadioButton("Orientation", (int*)&m_controlMode, ControlMode::ORIENTATION);
+		// ImGui::RadioButton("Joints", (int*)&m_controlMode, ControlMode::JOINTS);
 
-		if(m_controlMode == ControlMode::JOINTS){
-			ImGui::Text("Selected Joints: ");
-			for(auto joint : m_jointNodes){
-				ImGui::Text(joint->m_name.c_str());
-			}
-		}
+		// if(m_controlMode == ControlMode::JOINTS){
+		// 	ImGui::Text("Selected Joints: ");
+		// 	for(auto joint : m_jointNodes){
+		// 		ImGui::Text(joint->m_name.c_str());
+		// 	}
+		// }
+
+		// Create bar to control errorThreshold from 0 ~ 1
+		ImGui::SliderFloat("Error Threshold", &m_errorThreshold, 0.0f, 1.5f);
 
 		if (ImGui::Button("Reset")) {
 			reset();
@@ -513,6 +517,7 @@ void clusterLOD::renderSceneGraph(const SceneNode & root) {
 
 	glBindVertexArray(m_vao_meshData);
 	m_geometryPass.enable();
+	m_meshConsolidator->streaming(m_errorThreshold);
 	root.draw(glm::mat4(1.0f), m_view, m_geometryPass);
 	m_geometryPass.disable();
 	glBindVertexArray(0);

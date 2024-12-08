@@ -15,40 +15,11 @@
 #include <functional>
 #include <fstream>
 #include <iostream>
+#include <omp.h>
 
 #define MAX_TRI_IN_CLUSTER 256
 #define MAX_CLUSTER_IN_CLUSTERGROUP 32
 #define MAX_TRI_IN_CLUSTERGROUP (MAX_TRI_IN_CLUSTER * MAX_CLUSTER_IN_CLUSTERGROUP)
-
-glm::vec3 HSVtoRGB(float h, float s, float v) {
-    h = fmod(h, 1.0f) * 6.0f;
-    int i = static_cast<int>(floor(h));
-    float f = h - i;
-    float p = v * (1.0f - s);
-    float q = v * (1.0f - f * s);
-    float t = v * (1.0f - (1.0f - f) * s);
-
-    switch (i) {
-    case 0: return glm::vec3(v, t, p);
-    case 1: return glm::vec3(q, v, p);
-    case 2: return glm::vec3(p, v, t);
-    case 3: return glm::vec3(p, q, v);
-    case 4: return glm::vec3(t, p, v);
-    case 5: return glm::vec3(v, p, q);
-    default: return glm::vec3(0.0f, 0.0f, 0.0f);
-    }
-}
-
-glm::vec3 genRdColor(){
-    // generate a random hue (h) in [0, 1)
-    float h = static_cast<float>(rand()) / RAND_MAX;
-    float s = 0.8f;
-    float v = 0.8f;
-
-    // convert HSV to RGB
-    return HSVtoRGB(h, s, v);
-}
-
 
 unsigned int SimpleMesh::createVertex(glm::vec3 position, glm::vec3 normal, glm::vec2 uv) {
     if (m_vertexMap.find(position) == m_vertexMap.end()) {
@@ -164,7 +135,7 @@ void SimpleMesh::exportMesh(const std::vector<std::pair<int, int>>& indexRanges,
     }
 
     for (unsigned int vertexId : vertices) {
-        SimpleVertex* vertex = &m_vertices[vertexId];
+        Vertex* vertex = &m_vertices[vertexId];
         outFile << "v " << vertex->position.x << " " << vertex->position.y << " " << vertex->position.z << std::endl;
         outFile << "vn " << vertex->normal.x << " " << vertex->normal.y << " " << vertex->normal.z << std::endl;
         outFile << "vt " << vertex->uv.x << " " << vertex->uv.y << std::endl;
@@ -541,7 +512,7 @@ void SimpleMesh::exportMeshSimplifier(MeshSimplifier& simplifier, const std::vec
     int simplifierVertexIndex = 0;
     auto createVertex = [&](int vertIdx) {
         if (vertexIndexMap.find(vertIdx) == vertexIndexMap.end()) {
-			SimpleVertex& vertex = m_vertices[vertIdx];
+			Vertex& vertex = m_vertices[vertIdx];
             
             MeshSimplifier::Vertex simplifiedVertex;
             simplifiedVertex.p = vec3f(vertex.position.x, vertex.position.y, vertex.position.z);
@@ -579,9 +550,9 @@ void SimpleMesh::exportMeshSimplifier(MeshSimplifier& simplifier, const std::vec
             simplifiedTriangle.v[1] = vertexIndexMap[face->v2];
             simplifiedTriangle.v[2] = vertexIndexMap[face->v3];
 
-            SimpleVertex& v1 = m_vertices[face->v1];
-            SimpleVertex& v2 = m_vertices[face->v2];
-            SimpleVertex& v3 = m_vertices[face->v3];
+            Vertex& v1 = m_vertices[face->v1];
+            Vertex& v2 = m_vertices[face->v2];
+            Vertex& v3 = m_vertices[face->v3];
             glm::vec3 faceNormal = glm::normalize(glm::cross(
                 v2.position - v1.position,
                 v3.position - v1.position
@@ -764,3 +735,68 @@ void LodMesh::printLODInformation() {
     }
 }
 
+
+
+void SimpleMesh::exportMesh(unsigned int startIdx, unsigned int endIdx, Mesh* mesh){
+    int triSize = endIdx - startIdx + 1;
+
+    std::vector<Vertex>& m_vertexData = mesh->m_vertexData;
+    std::vector<unsigned int>& m_indexData = mesh->m_indexData;
+
+    int vertexCount = 0;
+    std::unordered_map<unsigned int, unsigned int> vertexMapping;
+    std::vector<unsigned int> vertices;
+    vertexMapping.reserve(triSize * 3);
+    vertices.reserve(triSize * 3);
+    m_vertexData.reserve(triSize * 3);
+
+    auto createVertexMapping = [&](unsigned int v) {
+        if (vertexMapping.find(v) == vertexMapping.end()) {
+            vertices.push_back(v);
+            vertexMapping[v] = vertexCount;
+            vertexCount++;
+        }
+    };
+    
+    for (int i = startIdx; i <= endIdx; i++) {
+        SimpleFace* face = m_faces[i];
+        createVertexMapping(face->v1);
+        createVertexMapping(face->v2);
+        createVertexMapping(face->v3);
+    }
+    
+    for (unsigned int vertexId : vertices) {
+        Vertex* vertex = &m_vertices[vertexId];
+        m_vertexData.push_back(*vertex);
+    }
+
+
+    for (int i = startIdx; i <= endIdx; i++) {
+        SimpleFace* face = m_faces[i];
+        int v1 = vertexMapping[face->v1];
+        int v2 = vertexMapping[face->v2];
+        int v3 = vertexMapping[face->v3];
+        m_indexData.push_back(v1);
+        m_indexData.push_back(v2);
+        m_indexData.push_back(v3);
+    }
+}
+
+void LodMesh::exportLodRuntimeMesh(LodRuntimeMesh& mesh){
+    for(SimpleMesh* lodMesh : lodMesh){
+        for(SimpleMesh::ClusterGroup* clusterGroup : lodMesh->m_clusterGroups){
+            
+            ClusterGroup* newClusterGroup = new ClusterGroup(clusterGroup->error);
+            mesh.m_clusterGroups.push_back(newClusterGroup);
+
+            std::vector<SimpleMesh::Cluster*> clusters = clusterGroup->m_clusterlist;
+            for(SimpleMesh::Cluster* cluster : clusters){
+                float error = cluster->error;
+                Cluster* newCluster = new Cluster(error);
+                newClusterGroup->clusters.push_back(newCluster);
+
+                lodMesh->exportMesh(cluster->startIdx, cluster->endIdx, newCluster);
+            }
+        }
+    }
+}

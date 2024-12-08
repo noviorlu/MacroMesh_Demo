@@ -111,15 +111,6 @@ Mesh::Mesh(const std::vector<Mesh>& mergeMeshes) {
 }
 
 void Mesh::uploadToGPU() {
-    if(m_clusterList.size() > 0) {
-        for(auto& cluster : m_clusterList) {
-            cluster.uploadToGPU();
-        }
-        return;
-    }
-
-    
-
     glGenVertexArrays(1, &m_vao);
     glBindVertexArray(m_vao);
 
@@ -158,13 +149,6 @@ void Mesh::removeFromGPU() {
 }
 
 void Mesh::draw(const ShaderProgram& shader) const {
-    if(m_clusterList.size() > 0) {
-        for (auto& cluster : m_clusterList) {
-            cluster.draw(shader);
-        }
-        return;
-    }
-
     glBindVertexArray(m_vao);
     
     #if ENABLE_IBO == true

@@ -89,7 +89,8 @@ protected:
 	ShaderProgram m_geometryPass;
 	ShaderProgram m_lightingPass;
 
-	Mesh* m_meshConsolidator;
+	LodRuntimeMesh* m_meshConsolidator;
+	float m_errorThreshold = 0.0f;
 
 	std::string m_luaSceneFile;
 

@@ -10,6 +10,7 @@
 #include <initializer_list>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 #include <string>
 #include <iomanip> // For formatted output
 #include <sstream> // For easier testing/debugging
@@ -53,19 +54,13 @@ public:
 	virtual void draw(const ShaderProgram& shader) const;
 
 	static MeshInfoMap s_meshInfoMap;
-
 	std::vector<Vertex> m_vertexData;
-
 	std::vector<unsigned int> m_indexData;
-
-	std::vector<Cluster> m_clusterList;
-	std::vector<ClusterGroup> m_clusterGroupList;
 
 	GLuint m_vbo;
 	GLuint m_vao;
 	GLuint m_ibo;
 };
-
 
 class Cluster : public Mesh {
 public:
@@ -88,3 +83,13 @@ public:
 
 	void setGroupColor();
 };
+
+class LodRuntimeMesh : public Mesh {
+public:
+	std::vector<ClusterGroup*> m_clusterGroups;
+	std::unordered_map<Cluster*, bool> m_streamedClusters;
+
+	void streaming(float errorThreshold);
+	void draw(const ShaderProgram& shader) const override;
+};
+
