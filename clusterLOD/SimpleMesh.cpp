@@ -455,7 +455,10 @@ void SimpleMesh::grouperRecur(unsigned int startIdx, unsigned int endIdx, int de
 
 void SimpleMesh::grouper(){
     m_clusterGroupOffsets.clear();
+    m_clusterGroupErrors.clear();
+
     grouperRecur(0, m_clusters.size() - 1, 0);
+    
     std::sort(m_clusterGroupOffsets.begin(), m_clusterGroupOffsets.end());
     m_clusterGroupOffsets.push_back(m_clusters.size());
 
@@ -596,8 +599,8 @@ void SimpleMesh::exportMeshSimplifier(MeshSimplifier& simplifier, const std::vec
 }
 
 void SimpleMesh::QEM(SimpleMesh* targetMesh, const std::string& lodFolderPath, float ratio = 0.5) {
-    targetMesh->m_clusterGroups = m_clusterGroups;
-    targetMesh->m_clusterGroupErrors.resize(m_clusterGroups.size());
+    targetMesh->m_clusterGroupErrors.reserve(m_clusterGroups.size());
+    targetMesh->m_clusterGroupOffsets.reserve(m_clusterGroups.size()+1);
 
     targetMesh->m_vertices.reserve(m_vertices.size());
     targetMesh->m_vertexMap.reserve(m_vertices.size());
@@ -620,18 +623,15 @@ void SimpleMesh::QEM(SimpleMesh* targetMesh, const std::string& lodFolderPath, f
         if (target_count >= 4){
             int startSize = simplifier.triangles.size();
             simplifier.simplify_mesh(target_count, 7.0, true);
-            //#pragma omp critical
-            //std::cout << "Output: " << simplifier.vertices.size() << " vertices, " << simplifier.triangles.size() 
-            //    << " triangles (" << (float)simplifier.triangles.size() / (float)startSize 
-            //    << " reduction;) Total error: " << simplifier.total_error << std::endl;
         }
         
         std::string objFilePath = lodFolderPath + "/clusterGroup_QEM_" + std::to_string(i) + ".obj";
         simplifier.write_obj((objFilePath).c_str());
 
-        targetMesh->m_clusterGroupErrors[i] = simplifier.total_error + clusterGroup->error;
+        clusterGroup->error += simplifier.total_error;
         #pragma omp critical
         {
+            targetMesh->m_clusterGroupErrors.push_back(clusterGroup->error);
             targetMesh->m_clusterGroupOffsets.push_back(targetMesh->m_faces.size());
             targetMesh->importMeshSimplifier(simplifier);
         }
@@ -648,7 +648,6 @@ void SimpleMesh::QEM(SimpleMesh* targetMesh, const std::string& lodFolderPath, f
         }
     }
 
-	std::sort(targetMesh->m_clusterGroupOffsets.begin(), targetMesh->m_clusterGroupOffsets.end());
     targetMesh->m_clusterGroupOffsets.push_back(targetMesh->m_faces.size());
 
     targetMesh->m_vertexMap.clear();

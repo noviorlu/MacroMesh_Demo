@@ -98,7 +98,7 @@ public:
         GLuint m_vao;
         GLuint m_ibo;
 
-
+        
     };
     class ClusterGroup {
         public:
