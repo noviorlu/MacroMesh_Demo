@@ -484,7 +484,7 @@ void SimpleMesh::grouper(){
 void SimpleMesh::partition_loop(LodMesh& lod, const std::string& objFilePath, const std::string& lodFolderPath) {
     std::vector<SimpleMesh*>& lodMesh = lod.lodMesh;
     
-    lodMesh.resize(9);
+    lodMesh.resize(1);
 	lodMesh[0] = new SimpleMesh();
 
     auto starttime = std::chrono::high_resolution_clock::now();
@@ -518,8 +518,8 @@ void SimpleMesh::partition_loop(LodMesh& lod, const std::string& objFilePath, co
             << std::chrono::duration<double>(endtime - starttime).count()
             << "s" << std::endl;
 
-        if (i >= 8 || srcMesh->m_faces.size() < MAX_TRI_IN_CLUSTER) break;
-        lodMesh[i + 1] = new SimpleMesh();
+        if (srcMesh->m_faces.size() < MAX_TRI_IN_CLUSTER) break;
+        lodMesh.push_back(new SimpleMesh());
         SimpleMesh* targetMesh = lodMesh[i + 1];
         starttime = std::chrono::high_resolution_clock::now();
         srcMesh->QEM(targetMesh, folderPath, 0.5);
@@ -763,3 +763,4 @@ void LodMesh::printLODInformation() {
         std::cout << std::endl;
     }
 }
+

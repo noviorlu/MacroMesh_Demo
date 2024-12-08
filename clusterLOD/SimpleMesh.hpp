@@ -94,11 +94,13 @@ public:
              : startIdx(startIdx), endIdx(endIdx), 
         sequenceId(sequenceId), error(error) {}
     
+        void uploadToGPU();
+        void removeFromGPU();
+        void draw(const ShaderProgram& shader) const;
+
         GLuint m_vbo;
         GLuint m_vao;
         GLuint m_ibo;
-
-        
     };
     class ClusterGroup {
         public:
