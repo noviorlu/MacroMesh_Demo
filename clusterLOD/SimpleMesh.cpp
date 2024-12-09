@@ -86,10 +86,6 @@ void SimpleMesh::importMesh(const std::string& objFilePath) {
     m_vertices.shrink_to_fit();
     m_faces.shrink_to_fit();
 
-    m_clusterGroupOffsets.push_back(0);
-    m_clusterGroupOffsets.push_back(m_faces.size());
-
-    m_clusterGroupErrors.push_back(0);
     m_clusterGroups.push_back(new ClusterGroup(0, std::vector<Cluster*>()));
 }
 
@@ -171,33 +167,12 @@ void SimpleMesh::exportMesh(const std::string& objFilePath) {
     }
 }
 
-void SimpleMesh::exportClusterGroup(const std::string& lodFolderPath) {
-    if (!std::filesystem::exists(lodFolderPath)) {
-        std::filesystem::create_directories(lodFolderPath);
-    }
-    #pragma omp parallel for
-    for(int i = 0; i < m_clusterGroupOffsets.size() - 1; i++){
-        size_t startIdx = m_clusterGroupOffsets[i];
-        size_t endIdx = m_clusterGroupOffsets[i+1] - 1;
-
-        // construct file name
-        std::string fileName = lodFolderPath + "/clusterGroup_" + std::to_string(i) + ".obj";
-        
-        std::vector<std::pair<int, int>> indexRanges;
-        for(int j = startIdx; j <= endIdx; j++){
-            Cluster* cluster = m_clusters[j];
-            indexRanges.push_back(std::make_pair(cluster->startIdx, cluster->endIdx));
-        }
-        exportMesh(indexRanges, fileName);
-    }
-}
-
-void SimpleMesh::splitterRecur(unsigned int startIdx, unsigned int endIdx, int depth){
+void SimpleMesh::splitterRecur(std::vector<unsigned int>& clusterOffsets, unsigned int startIdx, unsigned int endIdx, int depth){
     size_t triCount = endIdx - startIdx + 1;
      if(triCount <= MAX_TRI_IN_CLUSTER){
     //if(depth == 3){
         #pragma omp critical
-        m_clusterOffsets.push_back(startIdx);
+        clusterOffsets.push_back(startIdx);
         return;
     }
     
@@ -266,10 +241,10 @@ void SimpleMesh::splitterRecur(unsigned int startIdx, unsigned int endIdx, int d
     #pragma omp parallel sections
     {
         #pragma omp section
-        {splitterRecur(startIdx, midIdx, depth+1);}
+        {splitterRecur(clusterOffsets, startIdx, midIdx, depth+1);}
 
         #pragma omp section
-        {splitterRecur(midIdx+1, endIdx, depth+1);}
+        {splitterRecur(clusterOffsets, midIdx+1, endIdx, depth+1);}
     }
 }
 
@@ -295,31 +270,41 @@ int findLowerBoundIndex(const std::vector<unsigned int>& mylist, int idx) {
     return left;
 }
 
-void SimpleMesh::splitter(){
-    m_clusterOffsets.clear();
-    #pragma omp parallel for
-    for (int i = 0; i < m_clusterGroupOffsets.size() - 1; i++) {
-		int startIdx = m_clusterGroupOffsets[i];
-		int endIdx = m_clusterGroupOffsets[i + 1] - 1;
+void SimpleMesh::splitter(const SimpleMesh::IntermDataList& intermDataList){
+    
+    m_clusters.reserve(m_faces.size() / MAX_TRI_IN_CLUSTER * 1.2);
 
-        splitterRecur(startIdx, endIdx, 0);
+    #pragma omp parallel for
+    for(auto& intermData : intermDataList){
+        std::vector<unsigned int> clusterOffsets;
+        splitterRecur(clusterOffsets, intermData.startIdx, intermData.endIdx, 0);
+
+        std::sort(clusterOffsets.begin(), clusterOffsets.end());
+        clusterOffsets.push_back(intermData.endIdx + 1);
+
+        #pragma omp critical
+        {
+            for(int i = 0; i < clusterOffsets.size() - 1; i++){
+                unsigned int startIdx = clusterOffsets[i];
+                unsigned int endIdx = clusterOffsets[i+1] - 1;
+
+                m_clusters.push_back(
+                    new Cluster(
+                        startIdx, endIdx, 
+                        m_clusters.size(), 
+                        intermData.error, 
+                        intermData.childGroup
+                    )
+                );
+            }
+        }
     }
-    std::sort(m_clusterOffsets.begin(), m_clusterOffsets.end());
-    m_clusterOffsets.push_back(m_faces.size());
 
-    m_clusters.resize(m_clusterOffsets.size() - 1);
 
     #pragma omp parallel for
-    for(int i = 0; i < m_clusterOffsets.size() - 1; i++){
-        unsigned int startIdx = m_clusterOffsets[i];
-        unsigned int endIdx = m_clusterOffsets[i+1] - 1;
-
-        // find clusterGroup error and assign to cluster
-        int idx = findLowerBoundIndex(m_clusterGroupOffsets, startIdx);
-        Cluster* cluster = new Cluster(startIdx, endIdx, i, m_clusterGroupErrors[idx]);
-        m_clusters[i] = cluster;
-
-        for(int j = startIdx; j <= endIdx; j++){
+    for(int i = 0; i < m_clusters.size(); i++){
+        Cluster* cluster = m_clusters[i];
+        for(int j = cluster->startIdx; j <= cluster->endIdx; j++){
             m_faces[j]->sequenceId = i;
         }
     }
@@ -337,13 +322,19 @@ void SimpleMesh::splitter(){
     }
 }
 
-void SimpleMesh::grouperRecur(unsigned int startIdx, unsigned int endIdx, int depth){
+void SimpleMesh::splitter(){
+    IntermDataList intermDataList;
+    intermDataList.push_back({0, static_cast<unsigned int>(m_faces.size() - 1), 0.0f, nullptr});
+    splitter(intermDataList);
+}
+
+void SimpleMesh::grouperRecur(std::vector<unsigned int>& clusterGroupOffsets, unsigned int startIdx, unsigned int endIdx, int depth){
     size_t clusterCount = endIdx - startIdx + 1;
     
     //if(clusterCount <= 1){
      if(clusterCount <= MAX_CLUSTER_IN_CLUSTERGROUP){
         #pragma omp critical
-        m_clusterGroupOffsets.push_back(startIdx);
+        clusterGroupOffsets.push_back(startIdx);
         return;
     }
 
@@ -412,29 +403,30 @@ void SimpleMesh::grouperRecur(unsigned int startIdx, unsigned int endIdx, int de
     #pragma omp parallel sections
     {
         #pragma omp section
-        {grouperRecur(startIdx, midIdx, depth+1);}
+        {grouperRecur(clusterGroupOffsets, startIdx, midIdx, depth+1);}
 
         #pragma omp section
-        {grouperRecur(midIdx+1, endIdx, depth+1);}
+        {grouperRecur(clusterGroupOffsets, midIdx+1, endIdx, depth+1);}
     }
 }
 
 void SimpleMesh::grouper(){
-    m_clusterGroupOffsets.clear();
-    m_clusterGroupErrors.clear();
+    std::vector<unsigned int> clusterGroupOffsets;
+    grouperRecur(clusterGroupOffsets, 0, m_clusters.size() - 1, 0);
+    std::sort(clusterGroupOffsets.begin(), clusterGroupOffsets.end());
+    clusterGroupOffsets.push_back(m_clusters.size());
 
-    grouperRecur(0, m_clusters.size() - 1, 0);
-    
-    std::sort(m_clusterGroupOffsets.begin(), m_clusterGroupOffsets.end());
-    m_clusterGroupOffsets.push_back(m_clusters.size());
+    for(auto& clusters : m_clusters){
+        clusters->adjClusters.clear();
+    }
 
     m_clusterGroups.clear();
-    m_clusterGroups.resize(m_clusterGroupOffsets.size() - 1);
+    m_clusterGroups.resize(clusterGroupOffsets.size() - 1);
 
     #pragma omp parallel for
-    for(int i = 0; i < m_clusterGroupOffsets.size() - 1; i++){
-        unsigned int startIdx = m_clusterGroupOffsets[i];
-        unsigned int endIdx = m_clusterGroupOffsets[i+1] - 1;
+    for(int i = 0; i < clusterGroupOffsets.size() - 1; i++){
+        unsigned int startIdx = clusterGroupOffsets[i];
+        unsigned int endIdx = clusterGroupOffsets[i+1] - 1;
         
         float maxError = 0.0f;
         std::vector<Cluster*> clusters;
@@ -461,21 +453,21 @@ void SimpleMesh::partition_loop(LodMesh& lod, const std::string& objFilePath, co
         << std::chrono::duration<double>(endtime - starttime).count()
         << "s" << std::endl;
 
+    starttime = std::chrono::high_resolution_clock::now();
+    lodMesh[0]->splitter();
+    endtime = std::chrono::high_resolution_clock::now();
+    std::cout << "First Splitter Time: "
+        << std::fixed << std::setprecision(5)
+        << std::chrono::duration<double>(endtime - starttime).count()
+        << "s" << std::endl;
+
     for (int i = 0;; i++) {
         SimpleMesh* srcMesh = lodMesh[i];
-        auto folderPath = lodFolderPath + "_" + std::to_string(i);
+        auto folderPath = lodFolderPath;
         if (!std::filesystem::exists(folderPath)) {
             std::filesystem::create_directories(folderPath);
         }
         
-        starttime = std::chrono::high_resolution_clock::now();
-        srcMesh->splitter();
-        endtime = std::chrono::high_resolution_clock::now();
-        std::cout << "Splitter Time: "
-            << std::fixed << std::setprecision(5)
-            << std::chrono::duration<double>(endtime - starttime).count()
-            << "s" << std::endl;
-
         starttime = std::chrono::high_resolution_clock::now();
         srcMesh->grouper();
         endtime = std::chrono::high_resolution_clock::now();
@@ -491,14 +483,25 @@ void SimpleMesh::partition_loop(LodMesh& lod, const std::string& objFilePath, co
         lodMesh.push_back(new SimpleMesh());
         SimpleMesh* targetMesh = lodMesh[i + 1];
         starttime = std::chrono::high_resolution_clock::now();
-        srcMesh->QEM(targetMesh, folderPath, 0.5);
+        auto& intermData = srcMesh->QEM(targetMesh, folderPath, 0.5);
         endtime = std::chrono::high_resolution_clock::now();
         std::cout << "QEM Cluster Group + Export Time: "
             << std::fixed << std::setprecision(5)
             << std::chrono::duration<double>(endtime - starttime).count()
             << "s" << std::endl;
+
+        targetMesh->exportMesh(folderPath + "/LOD" + std::to_string(i) + ".obj");
+
+        starttime = std::chrono::high_resolution_clock::now();
+        targetMesh->splitter(intermData);
+        endtime = std::chrono::high_resolution_clock::now();
+        std::cout << "Splitter Time: "
+            << std::fixed << std::setprecision(5)
+            << std::chrono::duration<double>(endtime - starttime).count()
+            << "s" << std::endl;
     }
 }
+
 
 
 void SimpleMesh::exportMeshSimplifier(MeshSimplifier& simplifier, const std::vector<std::pair<int, int>>& indexRanges) {
@@ -567,9 +570,9 @@ void SimpleMesh::exportMeshSimplifier(MeshSimplifier& simplifier, const std::vec
     }
 }
 
-void SimpleMesh::QEM(SimpleMesh* targetMesh, const std::string& lodFolderPath, float ratio = 0.5) {
-    targetMesh->m_clusterGroupErrors.reserve(m_clusterGroups.size());
-    targetMesh->m_clusterGroupOffsets.reserve(m_clusterGroups.size()+1);
+SimpleMesh::IntermDataList SimpleMesh::QEM(SimpleMesh* targetMesh, const std::string& lodFolderPath, float ratio = 0.5) {
+    IntermDataList intermDataList;
+    intermDataList.reserve(m_clusterGroups.size());
 
     targetMesh->m_vertices.reserve(m_vertices.size());
     targetMesh->m_vertexMap.reserve(m_vertices.size());
@@ -600,9 +603,10 @@ void SimpleMesh::QEM(SimpleMesh* targetMesh, const std::string& lodFolderPath, f
         clusterGroup->error += simplifier.total_error;
         #pragma omp critical
         {
-            targetMesh->m_clusterGroupErrors.push_back(clusterGroup->error);
-            targetMesh->m_clusterGroupOffsets.push_back(targetMesh->m_faces.size());
+            unsigned int startIdx = targetMesh->m_faces.size();
             targetMesh->importMeshSimplifier(simplifier);
+            unsigned int endIdx = targetMesh->m_faces.size() - 1;
+            intermDataList.push_back({startIdx, endIdx, clusterGroup->error, clusterGroup});
         }
     }
 
@@ -617,8 +621,6 @@ void SimpleMesh::QEM(SimpleMesh* targetMesh, const std::string& lodFolderPath, f
         }
     }
 
-    targetMesh->m_clusterGroupOffsets.push_back(targetMesh->m_faces.size());
-
     targetMesh->m_vertexMap.clear();
     targetMesh->m_edgeMap.clear();
 
@@ -626,6 +628,7 @@ void SimpleMesh::QEM(SimpleMesh* targetMesh, const std::string& lodFolderPath, f
     targetMesh->m_faces.shrink_to_fit();
 
     std::cout << "Reuction from: " << this->m_faces.size() << " to " << targetMesh->m_faces.size() << std::endl;
+    return intermDataList;
 }
 
 void SimpleMesh::importMeshSimplifier(const MeshSimplifier& simplifier) {
@@ -730,6 +733,20 @@ void LodMesh::printLODInformation() {
             std::cout << "[" << j << "]: (" << triCount << " : "<< mesh->m_clusterGroups[j]->error << ") ";
         }
         std::cout << std::endl;
+    }
+
+    for(const auto& mesh : lodMesh){
+        for(const auto& cg : mesh->m_clusterGroups){
+            for(const auto& c : cg->m_clusterlist){
+                assert(cg->error > c->error);
+                if(c->childGroup != nullptr){
+                    assert(c->error == c->childGroup->error);
+                }
+                else{
+                    assert(c->error == 0.0f);
+                }
+            }
+        }
     }
 }
 

@@ -91,7 +91,7 @@ protected:
 
 	LodRuntimeMesh* m_meshConsolidator;
 	float m_errorThreshold = 0.0f;
-
+	float m_actualThreshold = 0.0f;
 	std::string m_luaSceneFile;
 
 	std::shared_ptr<SceneNode> m_rootNode;

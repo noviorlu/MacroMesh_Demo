@@ -413,11 +413,17 @@ void clusterLOD::guiLogic()
 		// }
 
 		// Create bar to control errorThreshold from 0 ~ 1
-		ImGui::SliderFloat("Error Threshold", &m_errorThreshold, 0.0f, 1.5f);
+		if(ImGui::SliderFloat("Error Threshold", &m_errorThreshold, 0.0f, 1.0f)){
+			m_actualThreshold = (std::exp(6 * (m_errorThreshold - 1)) - 0.002479f) * 1.5f;
+			if(m_actualThreshold < 0.0f) m_actualThreshold = 0.0f;
+		}
 
 		if (ImGui::Button("Reset")) {
 			reset();
 		}
+
+		ImGui::Text("Threshold: %f", m_actualThreshold);
+		ImGui::Text("Streamed Clusters: %d", m_meshConsolidator->m_streamedClusters.size());
 
 		// Create Button, and check if it was clicked:
 		if( ImGui::Button( "Quit Application" ) ) {
@@ -517,7 +523,7 @@ void clusterLOD::renderSceneGraph(const SceneNode & root) {
 
 	glBindVertexArray(m_vao_meshData);
 	m_geometryPass.enable();
-	m_meshConsolidator->streaming(m_errorThreshold);
+	m_meshConsolidator->streaming(m_actualThreshold);
 	root.draw(glm::mat4(1.0f), m_view, m_geometryPass);
 	m_geometryPass.disable();
 	glBindVertexArray(0);
