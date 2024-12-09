@@ -551,7 +551,6 @@ void SimpleMesh::partition_loop(LodMesh& lod, const std::string& objFilePath, co
             << "s" << std::endl;
 
         if (srcMesh->m_faces.size() < MAX_TRI_IN_CLUSTER){
-            srcMesh->m_clusterGroups[0]->error = std::numeric_limits<float>::infinity();
             break;
         }
         lodMesh.push_back(new SimpleMesh());
@@ -559,10 +558,18 @@ void SimpleMesh::partition_loop(LodMesh& lod, const std::string& objFilePath, co
         starttime = std::chrono::high_resolution_clock::now();
         auto& intermData = srcMesh->QEM(targetMesh, folderPath, 0.5);
         endtime = std::chrono::high_resolution_clock::now();
-        std::cout << "QEM Cluster Group + Export Time: "
+        std::cout << "QEM Cluster Group Time: "
             << std::fixed << std::setprecision(5)
-            << std::chrono::duration<double>(endtime - starttime).count()
-            << "s" << std::endl;
+            << std::chrono::duration<double>(endtime - starttime).count() << "s" 
+            << " Size Reduce: " << srcMesh->m_faces.size() << " -> " << targetMesh->m_faces.size()
+            << std::endl;
+
+        if(srcMesh->m_faces.size() - targetMesh->m_faces.size() == 0){
+            std::cout << "No more reduction" << std::endl;
+            lodMesh.pop_back();
+            delete targetMesh;
+            break;
+        }
 
         starttime = std::chrono::high_resolution_clock::now();
         targetMesh->splitter(intermData);
@@ -698,8 +705,6 @@ SimpleMesh::IntermDataList SimpleMesh::QEM(SimpleMesh* targetMesh, const std::st
 
     targetMesh->m_vertices.shrink_to_fit();
     targetMesh->m_faces.shrink_to_fit();
-
-    std::cout << "Reuction from: " << this->m_faces.size() << " to " << targetMesh->m_faces.size() << std::endl;
     return intermDataList;
 }
 

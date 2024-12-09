@@ -71,20 +71,12 @@ void clusterLOD::init()
 
 	processLuaSceneFile(m_luaSceneFile);
 
-	// m_meshConsolidator = new Mesh();
-	// HalfEdgeMesh heMesh;
-	// heMesh.importMesh(ModelFilePath + "bunny/bunny.obj", 0.0f);
-	// heMesh.HalfEdgeMeshSplitter();
-	// Mesh::s_meshInfoMap[heMesh.m_name] = m_meshConsolidator;
-	// heMesh.exportMesh(m_meshConsolidator->m_clusterList, m_meshConsolidator->m_clusterGroupList);
-	// heMesh.exportMeshToObjFiles(ModelFilePath + "bunny/LOD1");
-	// FastQEM(ModelFilePath + "bunny/LOD1");
-	// exit(0);
 	m_meshConsolidator = new LodRuntimeMesh();
 	Mesh::s_meshInfoMap["bunny"] = m_meshConsolidator;
 	
 	LodMesh lod;
 	SimpleMesh::partition_loop(lod, ModelFilePath + "dragon/dragon.obj", ModelFilePath + "dragon/LOD");
+	m_maxError = lod.lodMesh[lod.lodMesh.size()-1]->m_clusterGroups[0]->error + 0.01f;
 	lod.printLODInformation();
 	lod.exportLodRuntimeMesh(*m_meshConsolidator);
 
@@ -414,7 +406,7 @@ void clusterLOD::guiLogic()
 
 		// Create bar to control errorThreshold from 0 ~ 1
 		if(ImGui::SliderFloat("Error Threshold", &m_errorThreshold, 0.0f, 1.0f)){
-			m_actualThreshold = (std::exp(6 * (m_errorThreshold - 1)) - 0.002479f) * 1.5f;
+			m_actualThreshold = std::exp(6 * (m_errorThreshold - 1)) * m_maxError * m_errorThreshold;
 			if(m_actualThreshold < 0.0f) m_actualThreshold = 0.0f;
 		}
 
