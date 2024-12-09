@@ -34,58 +34,132 @@ void SimpleMesh::createEdge(unsigned int v1, unsigned int v2, SimpleFace* face) 
 }
 
 void SimpleMesh::importMesh(const std::string& objFilePath) {
-    std::vector<glm::vec3> positions;
-    std::vector<glm::vec3> normals;
-    std::vector<glm::vec2> uvCoords;
-    ObjFileDecoder::decode(objFilePath.c_str(), m_name, positions, normals, uvCoords);
-    
-    std::function<unsigned int(int)> createVertex;
-    if (!uvCoords.empty()) {
-        createVertex = [&](int i) -> unsigned int {
-            return SimpleMesh::createVertex(positions[i], normals[i], uvCoords[i]);
-        };
-    } else {
-        createVertex = [&](int i) -> unsigned int {
-            return SimpleMesh::createVertex(positions[i], normals[i], glm::vec2(0.0f));
-        };
+    auto positions = std::make_unique<std::vector<glm::vec3>>();
+    auto normals = std::make_unique<std::vector<glm::vec3>>();
+    auto texCoords = std::make_unique<std::vector<glm::vec2>>();
+
+    // Open the file for reading
+    std::ifstream file(objFilePath, std::ios::binary | std::ios::in);
+    if (!file.is_open()) {
+        throw std::runtime_error("Unable to open .obj file.");
     }
 
-    m_faces.clear();
-    m_vertices.clear();
-    m_faces.reserve(positions.size() / 3);
-    m_vertices.reserve(positions.size());
+    // Determine file size
+    file.seekg(0, std::ios::end);
+    std::streamsize fileSize = file.tellg();
+    file.seekg(0, std::ios::beg);
 
-    for(int i = 0; i < positions.size(); i+=3){
-        unsigned int v1, v2, v3;
-        v1 = createVertex(i);
-        v2 = createVertex(i+1);
-        v3 = createVertex(i+2);
+    // Estimate total number of lines (average line size ~50 bytes, adjust as needed)
+    const size_t avgLineSize = 50;
+    size_t estimatedLineCount = static_cast<size_t>(fileSize / avgLineSize);
 
-        SimpleFace* face = new SimpleFace(v1, v2, v3, i / 3);
-        m_faces.push_back(face);
+    // Assume 40% of lines are vertices (v), 30% normals (vn), 30% texCoords (vt)
+    size_t estimatedVertices = static_cast<size_t>(estimatedLineCount * 0.4);
+    size_t estimatedNormals = static_cast<size_t>(estimatedLineCount * 0.3);
+    size_t estimatedTexCoords = static_cast<size_t>(estimatedLineCount * 0.3);
 
-        createEdge(v1, v2, face);
-        createEdge(v2, v3, face);
-        createEdge(v3, v1, face);
+    // Reserve space in vectors
+    positions->reserve(estimatedVertices);
+    normals->reserve(estimatedNormals);
+    texCoords->reserve(estimatedTexCoords);
+
+     // Reserve space for other containers
+    m_vertices.reserve(estimatedVertices);
+    m_faces.reserve(estimatedVertices / 3 * 1.1); // Assuming each face uses 3 vertices
+    m_vertexMap.reserve(estimatedVertices); // Assuming vertex map has similar size as vertices
+    m_edgeMap.reserve(estimatedVertices * 2 * 1.1); // Estimate edges, roughly 2x the number of vertices
+
+    std::string line;
+    while (std::getline(file, line)) {
+        if (line.substr(0, 2) == "v ") {
+            // Vertex position
+            std::istringstream s(line.substr(2));
+            glm::vec3 pos;
+            s >> pos.x >> pos.y >> pos.z;
+            positions->push_back(pos);
+
+        } else if (line.substr(0, 3) == "vt ") {
+            // Texture coordinate
+            std::istringstream s(line.substr(3));
+            glm::vec2 tex;
+            s >> tex.x >> tex.y;
+            texCoords->push_back(tex);
+
+        } else if (line.substr(0, 3) == "vn ") {
+            // Normal
+            std::istringstream s(line.substr(3));
+            glm::vec3 norm;
+            s >> norm.x >> norm.y >> norm.z;
+            normals->push_back(norm);
+
+        } else if (line.substr(0, 2) == "f ") {
+            // Face
+            int posIdx[3], texIdx[3], normIdx[3];
+            bool hasTex = false, hasNorm = false;
+
+            if (line.find("//") != std::string::npos) {
+                // Format: v//vn
+                sscanf(line.c_str(), "f %d//%d %d//%d %d//%d",
+                       &posIdx[0], &normIdx[0],
+                       &posIdx[1], &normIdx[1],
+                       &posIdx[2], &normIdx[2]);
+                hasNorm = true;
+            } else if (line.find('/') != std::string::npos) {
+                // Format: v/vt/vn
+                sscanf(line.c_str(), "f %d/%d/%d %d/%d/%d %d/%d/%d",
+                       &posIdx[0], &texIdx[0], &normIdx[0],
+                       &posIdx[1], &texIdx[1], &normIdx[1],
+                       &posIdx[2], &texIdx[2], &normIdx[2]);
+                hasTex = true;
+                hasNorm = true;
+            } else {
+                // Format: v
+                sscanf(line.c_str(), "f %d %d %d",
+                       &posIdx[0], &posIdx[1], &posIdx[2]);
+            }
+            auto adjustIndex = [](int index, int totalCount) -> int {
+                return index < 0 ? totalCount + index + 1 : index - 1;
+            };
+            // Adjust indices to be 0-based
+            for (int i = 0; i < 3; ++i) {
+                posIdx[i] = adjustIndex(posIdx[i], positions->size());
+                if (hasTex) texIdx[i] = adjustIndex(texIdx[i], texCoords->size());
+                if (hasNorm) normIdx[i] = adjustIndex(normIdx[i], normals->size());
+            }
+
+            unsigned int v0 = createVertex((*positions)[posIdx[0]], (*normals)[normIdx[0]], hasTex ? (*texCoords)[texIdx[0]] : glm::vec2(0.0f));
+            unsigned int v1 = createVertex((*positions)[posIdx[1]], (*normals)[normIdx[1]], hasTex ? (*texCoords)[texIdx[1]] : glm::vec2(0.0f));
+            unsigned int v2 = createVertex((*positions)[posIdx[2]], (*normals)[normIdx[2]], hasTex ? (*texCoords)[texIdx[2]] : glm::vec2(0.0f));
+
+            // Create face
+            SimpleFace* face = new SimpleFace(v0, v1, v2, m_faces.size());
+            m_faces.push_back(face);
+
+            // Create edges
+            createEdge(v0, v1, face);
+            createEdge(v1, v2, face);
+            createEdge(v2, v0, face);
+        }
     }
 
-    // construct AdjacentFaces in all SimpleFace
-    for(auto& edge : m_edgeMap){
+    file.close();
+
+    // Construct adjacent faces
+    for (auto& edge : m_edgeMap) {
         auto& faces = edge.second;
-        for(int i = 0; i < faces.size(); i++){
-            for(int j = i+1; j < faces.size(); j++){
+        for (size_t i = 0; i < faces.size(); ++i) {
+            for (size_t j = i + 1; j < faces.size(); ++j) {
                 faces[i]->adjacentFace.insert(faces[j]);
                 faces[j]->adjacentFace.insert(faces[i]);
             }
         }
     }
 
-    m_vertexMap.clear();
+    // Final cleanup
     m_edgeMap.clear();
-
+    m_vertexMap.clear();
     m_vertices.shrink_to_fit();
     m_faces.shrink_to_fit();
-
     m_clusterGroups.push_back(new ClusterGroup(0, std::vector<Cluster*>()));
 }
 
@@ -489,8 +563,6 @@ void SimpleMesh::partition_loop(LodMesh& lod, const std::string& objFilePath, co
             << std::fixed << std::setprecision(5)
             << std::chrono::duration<double>(endtime - starttime).count()
             << "s" << std::endl;
-
-        targetMesh->exportMesh(folderPath + "/LOD" + std::to_string(i) + ".obj");
 
         starttime = std::chrono::high_resolution_clock::now();
         targetMesh->splitter(intermData);

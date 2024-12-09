@@ -84,7 +84,7 @@ void clusterLOD::init()
 	Mesh::s_meshInfoMap["bunny"] = m_meshConsolidator;
 	
 	LodMesh lod;
-	SimpleMesh::partition_loop(lod, ModelFilePath + "bunny/bunny.obj", ModelFilePath + "bunny/LOD");
+	SimpleMesh::partition_loop(lod, ModelFilePath + "dragon/dragon.obj", ModelFilePath + "dragon/LOD");
 	lod.printLODInformation();
 	lod.exportLodRuntimeMesh(*m_meshConsolidator);
 

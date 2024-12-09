@@ -34,6 +34,12 @@ public:
 class LodMesh;
 class SimpleMesh {
 public:
+    SimpleMesh()
+        : m_vertexMap(std::make_unique<std::unordered_map<glm::vec3, unsigned int>>()),
+        m_edgeMap(std::make_unique<std::unordered_map<std::pair<unsigned int, unsigned int>, std::vector<SimpleFace*>>>()),
+        m_vertices(std::make_unique<std::vector<Vertex>>()),
+        m_faces(std::make_unique<std::vector<SimpleFace*>>()) { }
+public:
     class ClusterGroup;
     struct IntermData{
         unsigned int startIdx;
@@ -89,11 +95,11 @@ public:
     std::vector<ClusterGroup*> m_clusterGroups;
 public: 
     std::string m_name;
-    std::unordered_map<glm::vec3, unsigned int> m_vertexMap;
-    std::unordered_map<std::pair<unsigned int, unsigned int>, std::vector<SimpleFace*>> m_edgeMap;
+    std::unique_ptr<std::unordered_map<glm::vec3, unsigned int>> m_vertexMap;
+    std::unique_ptr<std::unordered_map<std::pair<unsigned int, unsigned int>, std::vector<SimpleFace*>>> m_edgeMap;
 
-    std::vector<Vertex> m_vertices;
-    std::vector<SimpleFace*> m_faces;
+    std::unique_ptr<std::vector<Vertex>> m_vertices;
+    std::unique_ptr<std::vector<SimpleFace*>> m_faces;
 
     unsigned int createVertex(glm::vec3 position, glm::vec3 normal, glm::vec2 uv); 
     void createEdge(unsigned int v1, unsigned int v2, SimpleFace* face);
