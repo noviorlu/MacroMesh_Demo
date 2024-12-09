@@ -84,8 +84,6 @@ void LodRuntimeMesh::streaming(float errorThreshold) {
             ++it;
         }
     }
-
-    std::cout << "Number of streamed clusters: " << m_streamedClusters.size() << std::endl;
 }
 
 void LodRuntimeMesh::draw(const ShaderProgram& shader) const {

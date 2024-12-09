@@ -247,7 +247,7 @@ vec3f interpolate(const vec3f &p, const vec3f &a, const vec3f &b, const vec3f &c
 	return out;
 }
 
-double min(double v1, double v2) {
+double MIN(double v1, double v2) {
 	return fmin(v1,v2);
 }
 
@@ -628,7 +628,7 @@ private:
 			t.err[0]=calculate_error(t.v[0],t.v[1],p);
 			t.err[1]=calculate_error(t.v[1],t.v[2],p);
 			t.err[2]=calculate_error(t.v[2],t.v[0],p);
-			t.err[3]=min(t.err[0],min(t.err[1],t.err[2]));
+			t.err[3]=MIN(t.err[0],MIN(t.err[1],t.err[2]));
 			refs.push_back(r);
 		}
 	}
@@ -747,7 +747,7 @@ private:
 				// Calc Edge Error
 				Triangle &t=triangles[i];vec3f p;
 				loopj(0,3) t.err[j]=calculate_error(t.v[j],t.v[(j+1)%3],p);
-				t.err[3]=min(t.err[0],min(t.err[1],t.err[2]));
+				t.err[3]=MIN(t.err[0],MIN(t.err[1],t.err[2]));
 			}
 		}
 	}
@@ -821,7 +821,7 @@ private:
 			double error1 = vertex_error(q, p1.x,p1.y,p1.z);
 			double error2 = vertex_error(q, p2.x,p2.y,p2.z);
 			double error3 = vertex_error(q, p3.x,p3.y,p3.z);
-			error = min(error1, min(error2, error3));
+			error = MIN(error1, MIN(error2, error3));
 			if (error1 == error) p_result=p1;
 			if (error2 == error) p_result=p2;
 			if (error3 == error) p_result=p3;
