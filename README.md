@@ -1,4 +1,6 @@
-# uwaterloo CS488 Framework
+# Cluster-based Dynamic LOD generation & selection
+
+https://github.com/user-attachments/assets/996cf7c3-2f4e-46a7-ac60-fadd8ceb9999
 
 ---
 
@@ -18,6 +20,7 @@
 * METIS
 
 ---
+
 
 ## Building Projects
 We use **premake4** as our cross-platform build system. First you will need to build all
